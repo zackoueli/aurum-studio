@@ -15,7 +15,7 @@ export default function Hero() {
           filter: "brightness(.5)",
         }}
       >
-        <source src="/3998510-hd_1366_720_50fps.mp4" type="video/mp4" />
+        <source src="https://firebasestorage.googleapis.com/v0/b/coiffeur-60625.firebasestorage.app/o/3998510-hd_1366_720_50fps.mp4?alt=media&token=495f229d-f0cb-4c49-b89b-bd579f8890ff" type="video/mp4" />
         {/* Fallback photo si vidéo ne charge pas */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=2000&q=90" alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "grayscale(100%) brightness(.5)" }} />
