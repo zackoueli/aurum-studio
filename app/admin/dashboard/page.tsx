@@ -1,282 +1,289 @@
 "use client";
 export const dynamic = "force-dynamic";
-import { useEffect, useState, useRef } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { collection, getDocs, orderBy, query, deleteDoc, doc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
-import { auth, db, storage } from "@/lib/firebase";
+
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Upload, Trash2, LogOut, Image as ImageIcon, Calendar, MessageSquare } from "lucide-react";
-import Image from "next/image";
+import { signOut } from "firebase/auth";
+import {
+  collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, orderBy
+} from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
+import type { Booking, Closure } from "@/lib/types";
+import { seedData } from "@/lib/seed";
 
-type Tab = "gallery" | "bookings" | "messages";
+type Tab = "bookings" | "closures" | "settings";
 
-type Booking = { id: string; firstName: string; lastName: string; email: string; service: string; date: string; time: string; status: string; createdAt?: { seconds: number } };
-type Message = { id: string; name: string; email: string; message: string; createdAt?: { seconds: number } };
-type GalleryItem = { name: string; url: string };
+const cell: React.CSSProperties = {
+  padding: ".65rem 1rem", fontFamily: "var(--f-sans)", fontSize: ".72rem",
+  color: "rgba(245,240,232,.6)", borderBottom: "1px solid rgba(245,240,232,.05)",
+};
+const th: React.CSSProperties = {
+  ...cell, fontWeight: 600, fontSize: ".48rem", letterSpacing: ".3em",
+  textTransform: "uppercase", color: "rgba(245,240,232,.25)",
+};
+const inp: React.CSSProperties = {
+  background: "rgba(245,240,232,.06)", border: "1px solid rgba(245,240,232,.1)",
+  padding: ".6rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".78rem",
+  color: "var(--creme)", outline: "none",
+};
+
+function Badge({ status }: { status: Booking["status"] }) {
+  const colors: Record<string, string> = {
+    pending:   "rgba(184,148,90,.25)",
+    confirmed: "rgba(39,174,96,.2)",
+    cancelled: "rgba(192,57,43,.2)",
+  };
+  const labels: Record<string, string> = { pending: "En attente", confirmed: "Confirmé", cancelled: "Annulé" };
+  return (
+    <span style={{ background: colors[status], padding: ".25rem .7rem", borderRadius: "100px", fontFamily: "var(--f-sans)", fontSize: ".58rem", letterSpacing: ".15em", textTransform: "uppercase", color: "var(--creme)", whiteSpace: "nowrap" }}>
+      {labels[status]}
+    </span>
+  );
+}
 
 export default function AdminDashboard() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("gallery");
-  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [tab, setTab]           = useState<Tab>("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [closures, setClosures] = useState<Closure[]>([]);
+  const [filterDate, setFilterDate]     = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  const [clDate, setClDate]     = useState("");
+  const [clAllDay, setClAllDay] = useState(true);
+  const [clStart, setClStart]   = useState("09:00");
+  const [clEnd, setClEnd]       = useState("19:00");
+  const [clReason, setClReason] = useState("");
+  const [seeding, setSeeding]   = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.push("/admin/login");
-      else {
-        setLoading(false);
-        fetchAll();
-      }
-    });
-    return () => unsub();
-  }, [router]);
+    if (!loading && !user) router.push("/admin/login");
+  }, [user, loading, router]);
 
-  const fetchAll = async () => {
-    // Gallery
-    try {
-      const listRef = ref(storage, "gallery/");
-      const result = await listAll(listRef);
-      const items = await Promise.all(
-        result.items.map(async (item) => ({ name: item.name, url: await getDownloadURL(item) }))
-      );
-      setGallery(items);
-    } catch {}
+  useEffect(() => {
+    if (!user) return;
+    loadBookings();
+    loadClosures();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Bookings
-    try {
-      const snap = await getDocs(query(collection(db, "bookings"), orderBy("createdAt", "desc")));
-      setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Booking)));
-    } catch {}
-
-    // Messages
-    try {
-      const snap = await getDocs(query(collection(db, "contacts"), orderBy("createdAt", "desc")));
-      setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Message)));
-    } catch {}
+  const loadBookings = async () => {
+    const snap = await getDocs(query(collection(db, "bookings"), orderBy("date", "desc")));
+    setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
+  };
+  const loadClosures = async () => {
+    const snap = await getDocs(query(collection(db, "closures"), orderBy("date")));
+    setClosures(snap.docs.map(d => ({ id: d.id, ...d.data() } as Closure)));
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    try {
-      await Promise.all(
-        Array.from(files).map(async (file) => {
-          const storageRef = ref(storage, `gallery/${Date.now()}_${file.name}`);
-          await uploadBytes(storageRef, file);
-        })
-      );
-      await fetchAll();
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+  const updateStatus = async (id: string, status: Booking["status"]) => {
+    await updateDoc(doc(db, "bookings", id), { status });
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
   };
 
-  const deleteImage = async (name: string) => {
-    if (!confirm("Supprimer cette image ?")) return;
-    try {
-      await deleteObject(ref(storage, `gallery/${name}`));
-      setGallery((prev) => prev.filter((i) => i.name !== name));
-    } catch {}
+  const addClosure = async () => {
+    if (!clDate) return;
+    const data = {
+      date: clDate, allDay: clAllDay,
+      ...(clAllDay ? {} : { startTime: clStart, endTime: clEnd }),
+      reason: clReason,
+    };
+    const ref2 = await addDoc(collection(db, "closures"), data);
+    setClosures(prev => [...prev, { id: ref2.id, ...data } as Closure]);
+    setClDate(""); setClReason("");
   };
 
-  const deleteBooking = async (id: string) => {
-    if (!confirm("Supprimer cette réservation ?")) return;
-    await deleteDoc(doc(db, "bookings", id));
-    setBookings((prev) => prev.filter((b) => b.id !== id));
+  const deleteClosure = async (id: string) => {
+    await deleteDoc(doc(db, "closures", id));
+    setClosures(prev => prev.filter(c => c.id !== id));
   };
 
-  const deleteMessage = async (id: string) => {
-    if (!confirm("Supprimer ce message ?")) return;
-    await deleteDoc(doc(db, "contacts", id));
-    setMessages((prev) => prev.filter((m) => m.id !== id));
+  const handleSeed = async () => {
+    setSeeding(true);
+    await seedData();
+    setSeeding(false);
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  const filteredBookings = bookings.filter(b => {
+    if (filterDate && b.date !== filterDate) return false;
+    if (filterStatus !== "all" && b.status !== filterStatus) return false;
+    return true;
+  });
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "gallery", label: "Galerie", icon: <ImageIcon className="w-4 h-4" />, count: gallery.length },
-    { key: "bookings", label: "Réservations", icon: <Calendar className="w-4 h-4" />, count: bookings.length },
-    { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, count: messages.length },
-  ];
+  if (loading || !user) return null;
+
+  const pending = bookings.filter(b => b.status === "pending").length;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div style={{ minHeight: "100vh", background: "var(--texte)", color: "var(--creme)" }}>
       {/* Header */}
-      <header className="border-b border-white/5 px-6 py-4 flex items-center justify-between bg-[#111]">
-        <div>
-          <p className="font-[family-name:var(--font-playfair)] text-xl tracking-widest text-gold-gradient">AURUM</p>
-          <p className="text-xs tracking-[0.3em] text-[#c9a84c]/40 uppercase font-[family-name:var(--font-inter)]">Dashboard</p>
+      <div style={{ borderBottom: "1px solid rgba(245,240,232,.07)", padding: "1.2rem 3rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+          <span style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "1rem", letterSpacing: "-.02em" }}>Aurum Studio</span>
+          <span style={{ fontFamily: "var(--f-sans)", fontSize: ".5rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", borderLeft: "1px solid rgba(245,240,232,.1)", paddingLeft: "1.5rem" }}>Administration</span>
         </div>
-        <div className="flex items-center gap-4">
-          <a href="/" className="text-white/40 text-xs hover:text-[#c9a84c] transition-colors tracking-widest uppercase font-[family-name:var(--font-inter)]">
-            Voir le site
-          </a>
-          <button
-            onClick={() => signOut(auth).then(() => router.push("/admin/login"))}
-            className="flex items-center gap-2 text-white/40 text-xs hover:text-red-400 transition-colors font-[family-name:var(--font-inter)]"
-          >
-            <LogOut className="w-4 h-4" /> Déconnexion
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+          <a href="/" style={{ fontFamily: "var(--f-sans)", fontSize: ".62rem", letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(245,240,232,.3)", textDecoration: "none" }}>Voir le site</a>
+          <span style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.25)" }}>{user.email}</span>
+          <button onClick={() => signOut(auth).then(() => router.push("/admin/login"))} style={{ background: "none", border: "1px solid rgba(245,240,232,.1)", padding: ".4rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(245,240,232,.35)", cursor: "pointer" }}>
+            Déconnexion
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div style={{ padding: "2.5rem 3rem" }}>
         {/* Tabs */}
-        <div className="flex gap-2 mb-8 border-b border-white/5 pb-0">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-6 py-3 text-xs tracking-widest uppercase font-[family-name:var(--font-inter)] border-b-2 transition-all duration-300 -mb-px ${
-                tab === t.key
-                  ? "border-[#c9a84c] text-[#c9a84c]"
-                  : "border-transparent text-white/30 hover:text-white/60"
-              }`}
-            >
-              {t.icon}
-              {t.label}
-              <span className="bg-[#c9a84c]/20 text-[#c9a84c] text-xs px-2 py-0.5 rounded-full">
-                {t.count}
-              </span>
+        <div style={{ display: "flex", gap: "0", borderBottom: "1px solid rgba(245,240,232,.07)", marginBottom: "2.5rem" }}>
+          {([["bookings","Rendez-vous"],["closures","Fermetures"],["settings","Paramètres"]] as [Tab,string][]).map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{ padding: ".9rem 1.8rem", background: "none", border: "none", borderBottom: `2px solid ${tab === t ? "var(--creme)" : "transparent"}`, fontFamily: "var(--f-sans)", fontSize: ".72rem", fontWeight: tab === t ? 600 : 400, color: tab === t ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer", transition: "all .2s", marginBottom: "-1px" }}>
+              {label}
+              {t === "bookings" && pending > 0 && (
+                <span style={{ marginLeft: ".5rem", background: "var(--or)", color: "var(--texte)", borderRadius: "100px", padding: ".1rem .45rem", fontSize: ".5rem", fontWeight: 700 }}>{pending}</span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Gallery Tab */}
-        {tab === "gallery" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-white">Galerie</h2>
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleUpload}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="flex items-center gap-2 px-6 py-2 bg-[#c9a84c] text-black text-xs tracking-widest uppercase font-[family-name:var(--font-inter)] font-semibold hover:bg-[#e8c87a] transition-colors disabled:opacity-50"
-                >
-                  <Upload className="w-4 h-4" />
-                  {uploading ? "Upload..." : "Ajouter des photos"}
+        {/* ── Rendez-vous ─────────────────────────────────────────────── */}
+        {tab === "bookings" && (
+          <>
+            <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={inp} />
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="all">Tous les statuts</option>
+                <option value="pending">En attente</option>
+                <option value="confirmed">Confirmé</option>
+                <option value="cancelled">Annulé</option>
+              </select>
+              {(filterDate || filterStatus !== "all") && (
+                <button onClick={() => { setFilterDate(""); setFilterStatus("all"); }} style={{ ...inp, cursor: "pointer", color: "rgba(245,240,232,.4)" }}>Réinitialiser</button>
+              )}
+              <span style={{ marginLeft: "auto", fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.25)", alignSelf: "center" }}>
+                {filteredBookings.length} résultat{filteredBookings.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            <div style={{ border: "1px solid rgba(245,240,232,.07)", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Date","Heure","Client","Prestation","Coiffeur(se)","Durée","Statut","Actions"].map(h => (
+                      <th key={h} style={th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBookings.length === 0 ? (
+                    <tr><td colSpan={8} style={{ ...cell, textAlign: "center", color: "rgba(245,240,232,.2)", padding: "3rem" }}>Aucun rendez-vous</td></tr>
+                  ) : filteredBookings.map(b => (
+                    <tr key={b.id}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(245,240,232,.03)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+                      <td style={cell}>{b.date}</td>
+                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{b.startTime} → {b.endTime}</td>
+                      <td style={cell}>
+                        <div style={{ fontWeight: 500, color: "var(--creme)" }}>{b.userName}</div>
+                        <div style={{ fontSize: ".6rem", color: "rgba(245,240,232,.3)", marginTop: ".1rem" }}>{b.userEmail}</div>
+                        {b.userPhone && <div style={{ fontSize: ".6rem", color: "rgba(245,240,232,.25)", marginTop: ".1rem" }}>{b.userPhone}</div>}
+                      </td>
+                      <td style={cell}>{b.serviceName}</td>
+                      <td style={cell}>{b.staffName}</td>
+                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{b.serviceDuration} min</td>
+                      <td style={cell}><Badge status={b.status} /></td>
+                      <td style={{ ...cell, whiteSpace: "nowrap" }}>
+                        {b.status === "pending" && (
+                          <>
+                            <button onClick={() => updateStatus(b.id, "confirmed")} style={{ background: "rgba(39,174,96,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(39,200,100,.8)", cursor: "pointer", marginRight: ".4rem" }}>✓ Confirmer</button>
+                            <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕ Annuler</button>
+                          </>
+                        )}
+                        {b.status === "confirmed" && (
+                          <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕ Annuler</button>
+                        )}
+                        {b.status === "cancelled" && (
+                          <button onClick={() => updateStatus(b.id, "pending")} style={{ background: "rgba(184,148,90,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(184,148,90,.8)", cursor: "pointer" }}>↩ Remettre</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ── Fermetures ──────────────────────────────────────────────── */}
+        {tab === "closures" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "5rem", alignItems: "start" }}>
+            <div>
+              <p style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: "var(--creme)", marginBottom: "1.5rem" }}>Ajouter une fermeture</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div>
+                  <p style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: ".4rem" }}>Date</p>
+                  <input type="date" value={clDate} onChange={e => setClDate(e.target.value)} style={{ ...inp, width: "100%" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: ".8rem" }}>
+                  <input type="checkbox" id="allday" checked={clAllDay} onChange={e => setClAllDay(e.target.checked)} />
+                  <label htmlFor="allday" style={{ fontFamily: "var(--f-sans)", fontSize: ".75rem", color: "rgba(245,240,232,.5)", cursor: "pointer" }}>Journée complète</label>
+                </div>
+                {!clAllDay && (
+                  <div style={{ display: "flex", gap: "1rem" }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: ".4rem" }}>De</p>
+                      <input type="time" value={clStart} onChange={e => setClStart(e.target.value)} style={{ ...inp, width: "100%" }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: ".4rem" }}>À</p>
+                      <input type="time" value={clEnd} onChange={e => setClEnd(e.target.value)} style={{ ...inp, width: "100%" }} />
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <p style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: ".4rem" }}>Raison (optionnel)</p>
+                  <input value={clReason} onChange={e => setClReason(e.target.value)} placeholder="Congés, Jour férié…" style={{ ...inp, width: "100%" }} />
+                </div>
+                <button onClick={addClosure} disabled={!clDate} style={{ background: clDate ? "var(--creme)" : "rgba(245,240,232,.1)", color: clDate ? "var(--texte)" : "rgba(245,240,232,.3)", border: "none", padding: ".7rem 1.5rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, cursor: clDate ? "pointer" : "not-allowed", transition: "all .2s", alignSelf: "flex-start" }}>
+                  Ajouter
                 </button>
               </div>
             </div>
-
-            {gallery.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-white/10 text-white/20 font-[family-name:var(--font-inter)]">
-                Aucune photo. Cliquez sur &quot;Ajouter des photos&quot; pour commencer.
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {gallery.map((img) => (
-                  <div key={img.name} className="group relative aspect-square overflow-hidden bg-[#111]">
-                    <Image src={img.url} alt={img.name} fill className="object-cover" sizes="25vw" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-300 flex items-center justify-center">
-                      <button
-                        onClick={() => deleteImage(img.name)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity w-10 h-10 flex items-center justify-center bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/40"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+            <div>
+              <p style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: "var(--creme)", marginBottom: "1.5rem" }}>Fermetures planifiées</p>
+              {closures.length === 0 ? (
+                <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.2)" }}>Aucune fermeture planifiée.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  {closures.map(c => (
+                    <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: ".9rem 1.2rem", background: "rgba(245,240,232,.04)", border: "1px solid rgba(245,240,232,.06)" }}>
+                      <div>
+                        <p style={{ fontFamily: "var(--f-sans)", fontWeight: 500, fontSize: ".8rem", color: "var(--creme)" }}>{c.date}</p>
+                        <p style={{ fontFamily: "var(--f-sans)", fontSize: ".65rem", color: "rgba(245,240,232,.3)", marginTop: ".2rem" }}>
+                          {c.allDay ? "Journée complète" : `${c.startTime} – ${c.endTime}`}
+                          {c.reason && ` — ${c.reason}`}
+                        </p>
+                      </div>
+                      <button onClick={() => deleteClosure(c.id)} style={{ background: "none", border: "1px solid rgba(192,57,43,.3)", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(220,80,60,.6)", cursor: "pointer" }}>Supprimer</button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* Bookings Tab */}
-        {tab === "bookings" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-white mb-6">Réservations</h2>
-            {bookings.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-white/10 text-white/20 font-[family-name:var(--font-inter)]">
-                Aucune réservation reçue.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {bookings.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between p-5 bg-[#111] border border-white/5 hover:border-[#c9a84c]/20 transition-colors">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 flex-1 text-sm">
-                      <div>
-                        <p className="text-[#c9a84c]/50 text-xs uppercase tracking-widest font-[family-name:var(--font-inter)]">Client</p>
-                        <p className="text-white font-[family-name:var(--font-inter)]">{b.firstName} {b.lastName}</p>
-                      </div>
-                      <div>
-                        <p className="text-[#c9a84c]/50 text-xs uppercase tracking-widest font-[family-name:var(--font-inter)]">Service</p>
-                        <p className="text-white/70 font-[family-name:var(--font-inter)]">{b.service}</p>
-                      </div>
-                      <div>
-                        <p className="text-[#c9a84c]/50 text-xs uppercase tracking-widest font-[family-name:var(--font-inter)]">Date</p>
-                        <p className="text-white/70 font-[family-name:var(--font-inter)]">{b.date} {b.time}</p>
-                      </div>
-                      <div>
-                        <p className="text-[#c9a84c]/50 text-xs uppercase tracking-widest font-[family-name:var(--font-inter)]">Email</p>
-                        <p className="text-white/50 text-xs font-[family-name:var(--font-inter)]">{b.email}</p>
-                      </div>
-                      <div>
-                        <span className="px-2 py-1 bg-[#c9a84c]/10 text-[#c9a84c] text-xs uppercase tracking-widest font-[family-name:var(--font-inter)]">
-                          {b.status}
-                        </span>
-                      </div>
-                    </div>
-                    <button onClick={() => deleteBooking(b.id)} className="ml-4 text-white/20 hover:text-red-400 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* Messages Tab */}
-        {tab === "messages" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-white mb-6">Messages</h2>
-            {messages.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-white/10 text-white/20 font-[family-name:var(--font-inter)]">
-                Aucun message reçu.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((m) => (
-                  <div key={m.id} className="p-6 bg-[#111] border border-white/5 hover:border-[#c9a84c]/20 transition-colors relative">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                          <p className="text-white font-[family-name:var(--font-inter)] font-medium">{m.name}</p>
-                          <p className="text-white/30 text-xs font-[family-name:var(--font-inter)]">{m.email}</p>
-                        </div>
-                        <p className="text-white/50 text-sm font-[family-name:var(--font-inter)] leading-relaxed">{m.message}</p>
-                      </div>
-                      <button onClick={() => deleteMessage(m.id)} className="text-white/20 hover:text-red-400 transition-colors shrink-0">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
+        {/* ── Paramètres ──────────────────────────────────────────────── */}
+        {tab === "settings" && (
+          <div style={{ maxWidth: "600px" }}>
+            <p style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: "var(--creme)", marginBottom: ".6rem" }}>Initialisation des données</p>
+            <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".78rem", color: "rgba(245,240,232,.35)", marginBottom: "1.5rem", lineHeight: 1.6 }}>
+              Crée les 3 coiffeurs et les 7 prestations dans Firestore. À faire une seule fois après le premier déploiement.
+            </p>
+            <button onClick={handleSeed} disabled={seeding} style={{ background: "var(--creme)", color: "var(--texte)", border: "none", padding: ".8rem 2rem", fontFamily: "var(--f-sans)", fontSize: ".72rem", fontWeight: 500, cursor: "pointer", opacity: seeding ? .6 : 1 }}>
+              {seeding ? "Initialisation…" : "Initialiser staff & prestations"}
+            </button>
+            <p style={{ marginTop: "1rem", fontFamily: "var(--f-sans)", fontSize: ".65rem", color: "rgba(245,240,232,.2)" }}>Sophie Martin · Lucas Moreau · Inès Lefebvre — 7 prestations</p>
+          </div>
         )}
       </div>
     </div>

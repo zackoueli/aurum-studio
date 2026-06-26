@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Cursor from "@/components/Cursor";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "Aurum Studio",
@@ -11,8 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <body>
-        <Cursor />
-        {children}
+        <AuthProvider>
+          <Cursor />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
