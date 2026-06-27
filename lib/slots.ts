@@ -20,19 +20,28 @@ export async function getAvailableSlots(
   const dayOfWeek = new Date(date + "T12:00:00").getDay();
   if (!staff.workDays.includes(dayOfWeek)) return [];
 
-  // 1. Récupérer fermetures du jour
-  const closureSnap = await getDocs(query(collection(db, "closures"), where("date", "==", date)));
-  const closures = closureSnap.docs.map(d => d.data() as Closure);
+  // 1. Récupérer fermetures du jour (lecture publique — pas d'auth requise)
+  const closures: Closure[] = [];
+  try {
+    const closureSnap = await getDocs(query(collection(db, "closures"), where("date", "==", date)));
+    closures.push(...closureSnap.docs.map(d => d.data() as Closure));
+  } catch { /* pas de fermetures ou règles → on continue */ }
   if (closures.some(c => c.allDay)) return [];
 
-  // 2. Récupérer RDV existants du staff ce jour
-  const bookSnap = await getDocs(query(
-    collection(db, "bookings"),
-    where("staffId", "==", staffId),
-    where("date", "==", date),
-    where("status", "!=", "cancelled"),
-  ));
-  const bookings = bookSnap.docs.map(d => d.data() as Booking);
+  // 2. Récupérer RDV existants du staff ce jour (filtre JS pour éviter index composite)
+  const bookings: Booking[] = [];
+  try {
+    const bookSnap = await getDocs(query(
+      collection(db, "bookings"),
+      where("staffId", "==", staffId),
+      where("date", "==", date),
+    ));
+    bookings.push(
+      ...bookSnap.docs
+        .map(d => d.data() as Booking)
+        .filter(b => b.status !== "cancelled")
+    );
+  } catch { /* pas de RDV ou règles → on continue */ }
 
   // 3. Construire créneaux bloqués
   type Block = { start: number; end: number };
