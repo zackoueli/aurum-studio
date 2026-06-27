@@ -63,6 +63,91 @@ function Pill({ label, sub, active, onClick }: { label: string; sub?: string; ac
   );
 }
 
+// ── Calendrier inline ──────────────────────────────────────────
+const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+const DAYS_FR   = ["L","M","M","J","V","S","D"];
+
+function CalendarPicker({ year, month, dayCache, loadingMonth, selDate, onPrev, onNext, onSelectDate }: {
+  year: number; month: number;
+  dayCache: Record<string, boolean>;
+  loadingMonth: boolean;
+  selDate: string;
+  onPrev: () => void; onNext: () => void;
+  onSelectDate: (d: string) => void;
+}) {
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const firstDay = new Date(year, month, 1).getDay(); // 0=dim
+  const startOffset = (firstDay === 0 ? 6 : firstDay - 1); // lundi=0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const nowMonth = today.getMonth() === month && today.getFullYear() === year;
+
+  const cells: (number | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div style={{ border: "1px solid rgba(245,240,232,.1)" }}>
+      {/* Header mois */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: ".8rem 1rem", borderBottom: "1px solid rgba(245,240,232,.07)" }}>
+        <button onClick={onPrev} disabled={nowMonth} style={{ background: "none", border: "none", color: nowMonth ? "rgba(245,240,232,.15)" : "rgba(245,240,232,.5)", fontSize: "1rem", cursor: nowMonth ? "not-allowed" : "pointer", padding: ".2rem .5rem" }}>‹</button>
+        <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".78rem", color: "var(--creme)", letterSpacing: ".05em" }}>
+          {MONTHS_FR[month]} {year}
+          {loadingMonth && <span style={{ marginLeft: ".5rem", fontSize: ".55rem", color: "rgba(245,240,232,.25)" }}>chargement…</span>}
+        </span>
+        <button onClick={onNext} style={{ background: "none", border: "none", color: "rgba(245,240,232,.5)", fontSize: "1rem", cursor: "pointer", padding: ".2rem .5rem" }}>›</button>
+      </div>
+
+      {/* Jours de la semaine */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: ".5rem .8rem .3rem" }}>
+        {DAYS_FR.map((d, i) => (
+          <div key={i} style={{ textAlign: "center", fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".2em", color: "rgba(245,240,232,.2)", padding: ".3rem 0" }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Grille dates */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: ".2rem .8rem .8rem" }}>
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />;
+          const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const dateObj = new Date(dateStr + "T12:00:00");
+          const isPast  = dateObj < today;
+          const hasDispo = dayCache[dateStr] === true;
+          const noSlot   = dayCache[dateStr] === false;
+          const isLoading = dayCache[dateStr] === undefined;
+          const isSel   = dateStr === selDate;
+          const isToday = dateObj.toDateString() === today.toDateString();
+
+          return (
+            <button key={i} onClick={() => !isPast && hasDispo && onSelectDate(dateStr)}
+              style={{
+                background: isSel ? "var(--creme)" : "transparent",
+                border: isToday && !isSel ? "1px solid rgba(245,240,232,.2)" : "1px solid transparent",
+                borderRadius: "4px", margin: "2px",
+                padding: ".45rem .2rem",
+                fontFamily: "var(--f-sans)", fontSize: ".75rem", fontWeight: isSel ? 600 : 400,
+                color: isSel ? "var(--texte)" : isPast || noSlot ? "rgba(245,240,232,.12)" : isLoading ? "rgba(245,240,232,.3)" : "var(--creme)",
+                cursor: hasDispo && !isPast ? "pointer" : "default",
+                position: "relative",
+                transition: "all .15s",
+              }}
+              onMouseEnter={e => { if (hasDispo && !isPast && !isSel) e.currentTarget.style.background = "rgba(245,240,232,.08)"; }}
+              onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+            >
+              {day}
+              {/* Point vert = dispo */}
+              {hasDispo && !isPast && !isSel && (
+                <span style={{ position: "absolute", bottom: "3px", left: "50%", transform: "translateX(-50%)", width: "3px", height: "3px", borderRadius: "50%", background: "rgba(39,174,96,.7)" }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Composant principal ────────────────────────────────────────
 export default function Booking() {
   const { user } = useAuth();
@@ -74,6 +159,13 @@ export default function Booking() {
   const [staff, setStaff]       = useState<Staff[]>([]);
   const [slots, setSlots]       = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+
+  // Calendrier
+  const [calYear, setCalYear]   = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  // Cache dispo par date "YYYY-MM-DD" → boolean (true = au moins 1 créneau)
+  const [dayCache, setDayCache] = useState<Record<string, boolean>>({});
+  const [loadingMonth, setLoadingMonth] = useState(false);
 
   const [selService, setSelService] = useState<Service | null>(null);
   const [selStaff, setSelStaff]     = useState<Staff | null>(null);
@@ -92,7 +184,35 @@ export default function Booking() {
     });
   }, []);
 
-  // Charger créneaux quand staff + date + service sont choisis
+  // Pré-charger les dispos du mois affiché dès qu'on arrive à l'étape calendrier
+  useEffect(() => {
+    if (!selStaff || !selService || step !== 2) return;
+    loadMonthAvailability(calYear, calMonth);
+  }, [selStaff, selService, calYear, calMonth, step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadMonthAvailability = async (year: number, month: number) => {
+    if (!selStaff || !selService) return;
+    setLoadingMonth(true);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const results: Record<string, boolean> = {};
+    const checks: Promise<void>[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const dateObj = new Date(dateStr + "T12:00:00");
+      if (dateObj < today) { results[dateStr] = false; continue; }
+      checks.push(
+        getAvailableSlots(selStaff.id, selStaff, dateStr, selService.duration)
+          .then(s => { results[dateStr] = s.length > 0; })
+          .catch(() => { results[dateStr] = false; })
+      );
+    }
+    await Promise.all(checks);
+    setDayCache(prev => ({ ...prev, ...results }));
+    setLoadingMonth(false);
+  };
+
+  // Charger créneaux quand une date est sélectionnée
   useEffect(() => {
     if (!selStaff || !selDate || !selService) return;
     setLoadingSlots(true); setSlots([]); setSelTime("");
@@ -237,40 +357,54 @@ export default function Booking() {
                     </div>
                   )}
 
-                  {/* ÉTAPE 2 — Date + Créneau */}
+                  {/* ÉTAPE 2 — Calendrier + Créneau */}
                   {step === 2 && (
                     <div>
-                      <p style={lbl}>Choisissez une date</p>
-                      <input type="date" value={selDate} min={today}
-                        onChange={e => setSelDate(e.target.value)}
-                        style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(245,240,232,.15)", padding: ".65rem 0", color: "var(--creme)", fontFamily: "var(--f-sans)", fontSize: ".95rem", outline: "none", marginBottom: "2rem", width: "100%" }}
-                        onFocus={e => { e.target.style.borderBottomColor = "var(--creme)"; }}
-                        onBlur={e => { e.target.style.borderBottomColor = "rgba(245,240,232,.15)"; }}
+                      {/* ── Mini-calendrier ── */}
+                      <CalendarPicker
+                        year={calYear} month={calMonth}
+                        dayCache={dayCache} loadingMonth={loadingMonth}
+                        selDate={selDate}
+                        onPrev={() => {
+                          const d = new Date(calYear, calMonth - 1, 1);
+                          setCalYear(d.getFullYear()); setCalMonth(d.getMonth());
+                          setSelDate(""); setSlots([]);
+                        }}
+                        onNext={() => {
+                          const d = new Date(calYear, calMonth + 1, 1);
+                          setCalYear(d.getFullYear()); setCalMonth(d.getMonth());
+                          setSelDate(""); setSlots([]);
+                        }}
+                        onSelectDate={d => { setSelDate(d); setSelTime(""); }}
                       />
 
+                      {/* ── Créneaux ── */}
                       {selDate && (
-                        <>
-                          <p style={lbl}>Créneaux disponibles</p>
+                        <div style={{ marginTop: "1.5rem" }}>
+                          <p style={lbl}>
+                            Créneaux disponibles — {new Date(selDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                          </p>
                           {loadingSlots ? (
-                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".8rem", color: "rgba(245,240,232,.3)" }}>Chargement…</p>
+                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.3)" }}>Chargement…</p>
                           ) : slots.length === 0 ? (
-                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".8rem", color: "rgba(245,240,232,.3)" }}>Aucun créneau disponible ce jour.</p>
+                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.3)" }}>Aucun créneau disponible ce jour.</p>
                           ) : (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "2rem" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: ".6rem", marginBottom: ".5rem" }}>
                               {slots.map(s => (
                                 <button key={s} onClick={() => setSelTime(s)} style={{
                                   background: selTime === s ? "var(--creme)" : "rgba(245,240,232,.06)",
                                   border: `1px solid ${selTime === s ? "var(--creme)" : "rgba(245,240,232,.12)"}`,
-                                  padding: ".45rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".75rem",
-                                  color: selTime === s ? "var(--texte)" : "rgba(245,240,232,.6)",
-                                  cursor: "pointer", transition: "all .15s",
+                                  padding: ".45rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".78rem",
+                                  color: selTime === s ? "var(--texte)" : "rgba(245,240,232,.65)",
+                                  cursor: "pointer", transition: "all .15s", borderRadius: "4px",
                                 }}>{s}</button>
                               ))}
                             </div>
                           )}
-                        </>
+                        </div>
                       )}
-                      <div style={{ display: "flex", gap: "1rem" }}>
+
+                      <div style={{ display: "flex", gap: "1rem", marginTop: "1.8rem" }}>
                         <button onClick={() => setStep(1)} style={{ background: "none", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", color: "rgba(245,240,232,.4)", cursor: "pointer" }}>← Retour</button>
                         <button disabled={!selDate || !selTime} onClick={() => setStep(3)} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: (selDate && selTime) ? "var(--creme)" : "rgba(245,240,232,.1)", color: (selDate && selTime) ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: (selDate && selTime) ? "pointer" : "not-allowed", transition: "all .2s" }}>
                           Continuer <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", background: (selDate && selTime) ? "var(--texte)" : "rgba(245,240,232,.1)", color: (selDate && selTime) ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".7rem" }}>→</span>
