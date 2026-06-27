@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp, doc, setDoc, getDoc } from "firebase/firestore";
 import { signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -176,7 +176,7 @@ function InlineAuth({ onSuccess }: { onSuccess: (phone: string) => void }) {
         if (!phone.trim()) { setError("Le numéro de téléphone est obligatoire."); setLoading(false); return; }
         const cred = await createUserWithEmailAndPassword(auth, email, pwd);
         await updateProfile(cred.user, { displayName: name });
-        // Le téléphone est collecté séparément et stocké dans le booking
+        try { await setDoc(doc(db, "users", cred.user.uid), { phone, name, email }); } catch { /* règles Firestore */ }
       } else {
         await signInWithEmailAndPassword(auth, email, pwd);
       }
@@ -276,6 +276,14 @@ export default function Booking() {
     getDocs(collection(db, "services")).then(snap => setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Service))));
     getDocs(collection(db, "staff")).then(snap => setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() } as Staff))));
   }, []);
+
+  // Charger le téléphone du profil si déjà connecté
+  useEffect(() => {
+    if (!user) return;
+    getDoc(doc(db, "users", user.uid)).then(snap => {
+      if (snap.exists()) setPendingPhone(snap.data().phone ?? "");
+    }).catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!selStaff || !selService || step !== 2) return;
@@ -497,27 +505,20 @@ export default function Booking() {
                       {/* Auth ou bouton direct si déjà connecté */}
                       {user ? (
                         <>
-                          <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".78rem", color: "rgba(245,240,232,.35)", marginBottom: "1.2rem" }}>
+                          <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".78rem", color: "rgba(245,240,232,.35)", marginBottom: "1.5rem" }}>
                             Connecté en tant que <strong style={{ color: "rgba(245,240,232,.6)" }}>{user.displayName || user.email}</strong>
                           </p>
-                          <label style={{ display: "block", marginBottom: "1.5rem" }}>
-                            <span style={lbl}>Téléphone <span style={{ color: "rgba(245,240,232,.4)" }}>*</span></span>
-                            <input type="tel" required style={uInp} value={pendingPhone} onChange={e => setPendingPhone(e.target.value)} placeholder="06 12 34 56 78"
-                              onFocus={e => { e.target.style.borderBottomColor = "var(--creme)"; }}
-                              onBlur={e => { e.target.style.borderBottomColor = "rgba(245,240,232,.15)"; }}
-                            />
-                          </label>
                           <div style={{ display: "flex", gap: "1rem" }}>
                             <BackBtn onClick={() => setStep(2)} />
                             <button
                               onClick={() => submitBooking(user.uid, user.email ?? "", user.displayName ?? "", pendingPhone)}
-                              disabled={submitting || !pendingPhone.trim()}
-                              style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: pendingPhone.trim() ? "var(--creme)" : "rgba(245,240,232,.1)", color: pendingPhone.trim() ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: pendingPhone.trim() ? "pointer" : "not-allowed", opacity: submitting ? .6 : 1 }}
-                              onMouseEnter={e => { if (pendingPhone.trim()) e.currentTarget.style.background = "var(--or-clair)"; }}
-                              onMouseLeave={e => { if (pendingPhone.trim()) e.currentTarget.style.background = "var(--creme)"; }}
+                              disabled={submitting}
+                              style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: "var(--creme)", color: "var(--texte)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: "pointer", opacity: submitting ? .6 : 1 }}
+                              onMouseEnter={e => { e.currentTarget.style.background = "var(--or-clair)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "var(--creme)"; }}
                             >
                               {submitting ? "Envoi…" : "Confirmer le rendez-vous"}
-                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: pendingPhone.trim() ? "var(--texte)" : "rgba(245,240,232,.1)", color: pendingPhone.trim() ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".75rem" }}>↗</span>
+                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: "var(--texte)", color: "var(--creme)", fontSize: ".75rem" }}>↗</span>
                             </button>
                           </div>
                         </>
