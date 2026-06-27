@@ -41,3 +41,19 @@ export type Closure = {
   endTime?: string;
   reason?: string;
 };
+
+export type Contact = {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  createdAt: { seconds: number } | null;
+  read?: boolean;
+};
+
+export type GalleryPhoto = {
+  id: string;
+  url: string;
+  caption: string;
+  createdAt: number;
+};
