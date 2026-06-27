@@ -2,14 +2,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+import { signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { getAvailableSlots, addMinutes } from "@/lib/slots";
-import AuthModal from "./AuthModal";
 import type { Staff, Service } from "@/lib/types";
 
-// ── Styles communs ──────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────
 const lbl: React.CSSProperties = {
   display: "block", fontFamily: "var(--f-sans)", fontWeight: 500,
   fontSize: ".5rem", letterSpacing: ".4em", textTransform: "uppercase",
@@ -19,12 +18,19 @@ const val: React.CSSProperties = {
   fontFamily: "var(--f-sans)", fontWeight: 300,
   fontSize: ".9rem", color: "rgba(245,240,232,.7)",
 };
+const uInp: React.CSSProperties = {
+  background: "transparent", border: "none",
+  borderBottom: "1px solid rgba(245,240,232,.15)",
+  padding: ".65rem 0", color: "var(--creme)",
+  fontFamily: "var(--f-sans)", fontSize: ".9rem",
+  outline: "none", width: "100%", transition: "border-color .2s",
+};
 
-// ── Étape indicateur ────────────────────────────────────────────
+// ── Stepper ────────────────────────────────────────────────────
 function Steps({ current }: { current: number }) {
   const steps = ["Prestation", "Coiffeur", "Horaire", "Confirmation"];
   return (
-    <div style={{ display: "flex", gap: "0", marginBottom: "2.5rem" }}>
+    <div style={{ display: "flex", marginBottom: "2.5rem" }}>
       {steps.map((s, i) => (
         <div key={s} style={{ display: "flex", alignItems: "center", flex: 1 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ".3rem" }}>
@@ -34,8 +40,7 @@ function Steps({ current }: { current: number }) {
               border: `1px solid ${i <= current ? "var(--creme)" : "rgba(245,240,232,.15)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: "var(--f-sans)", fontSize: ".6rem", fontWeight: 600,
-              color: i <= current ? "var(--texte)" : "rgba(245,240,232,.3)",
-              transition: "all .3s",
+              color: i <= current ? "var(--texte)" : "rgba(245,240,232,.3)", transition: "all .3s",
             }}>{i < current ? "✓" : i + 1}</div>
             <span style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".2em", textTransform: "uppercase", color: i <= current ? "rgba(245,240,232,.6)" : "rgba(245,240,232,.2)" }}>{s}</span>
           </div>
@@ -48,18 +53,40 @@ function Steps({ current }: { current: number }) {
   );
 }
 
-// ── Bouton pill ────────────────────────────────────────────────
+// ── Pill sélectionnable ────────────────────────────────────────
 function Pill({ label, sub, active, onClick }: { label: string; sub?: string; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
       background: active ? "var(--creme)" : "rgba(245,240,232,.06)",
       border: `1px solid ${active ? "var(--creme)" : "rgba(245,240,232,.12)"}`,
-      padding: ".7rem 1.2rem", cursor: "pointer", textAlign: "left",
-      transition: "all .2s",
+      padding: ".7rem 1.2rem", cursor: "pointer", textAlign: "left", transition: "all .2s",
     }}>
       <span style={{ display: "block", fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: active ? "var(--texte)" : "rgba(245,240,232,.7)" }}>{label}</span>
       {sub && <span style={{ display: "block", fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".65rem", color: active ? "var(--gris)" : "rgba(245,240,232,.3)", marginTop: ".15rem" }}>{sub}</span>}
     </button>
+  );
+}
+
+// ── Bouton continuer ───────────────────────────────────────────
+function NextBtn({ disabled, onClick, label = "Continuer" }: { disabled: boolean; onClick: () => void; label?: string }) {
+  return (
+    <button disabled={disabled} onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: ".7rem",
+      background: disabled ? "rgba(245,240,232,.1)" : "var(--creme)",
+      color: disabled ? "rgba(245,240,232,.3)" : "var(--texte)",
+      fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500,
+      border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px",
+      cursor: disabled ? "not-allowed" : "pointer", transition: "all .2s",
+    }}>
+      {label}
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", background: disabled ? "rgba(245,240,232,.1)" : "var(--texte)", color: disabled ? "rgba(245,240,232,.3)" : "var(--creme)", fontSize: ".7rem" }}>→</span>
+    </button>
+  );
+}
+
+function BackBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{ background: "none", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", color: "rgba(245,240,232,.4)", cursor: "pointer" }}>← Retour</button>
   );
 }
 
@@ -68,75 +95,54 @@ const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","A
 const DAYS_FR   = ["L","M","M","J","V","S","D"];
 
 function CalendarPicker({ year, month, dayCache, loadingMonth, selDate, onPrev, onNext, onSelectDate }: {
-  year: number; month: number;
-  dayCache: Record<string, boolean>;
-  loadingMonth: boolean;
-  selDate: string;
-  onPrev: () => void; onNext: () => void;
-  onSelectDate: (d: string) => void;
+  year: number; month: number; dayCache: Record<string, boolean>; loadingMonth: boolean;
+  selDate: string; onPrev: () => void; onNext: () => void; onSelectDate: (d: string) => void;
 }) {
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const firstDay = new Date(year, month, 1).getDay(); // 0=dim
-  const startOffset = (firstDay === 0 ? 6 : firstDay - 1); // lundi=0
+  const today = new Date(); today.setHours(0,0,0,0);
+  const firstDay    = new Date(year, month, 1).getDay();
+  const startOffset = firstDay === 0 ? 6 : firstDay - 1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const nowMonth = today.getMonth() === month && today.getFullYear() === year;
-
-  const cells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  const nowMonth    = today.getMonth() === month && today.getFullYear() === year;
+  const cells: (number|null)[] = [...Array(startOffset).fill(null), ...Array.from({length: daysInMonth}, (_,i) => i+1)];
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
     <div style={{ border: "1px solid rgba(245,240,232,.1)" }}>
-      {/* Header mois */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: ".8rem 1rem", borderBottom: "1px solid rgba(245,240,232,.07)" }}>
         <button onClick={onPrev} disabled={nowMonth} style={{ background: "none", border: "none", color: nowMonth ? "rgba(245,240,232,.15)" : "rgba(245,240,232,.5)", fontSize: "1rem", cursor: nowMonth ? "not-allowed" : "pointer", padding: ".2rem .5rem" }}>‹</button>
         <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".78rem", color: "var(--creme)", letterSpacing: ".05em" }}>
           {MONTHS_FR[month]} {year}
-          {loadingMonth && <span style={{ marginLeft: ".5rem", fontSize: ".55rem", color: "rgba(245,240,232,.25)" }}>chargement…</span>}
+          {loadingMonth && <span style={{ marginLeft: ".5rem", fontSize: ".55rem", color: "rgba(245,240,232,.25)" }}> chargement…</span>}
         </span>
         <button onClick={onNext} style={{ background: "none", border: "none", color: "rgba(245,240,232,.5)", fontSize: "1rem", cursor: "pointer", padding: ".2rem .5rem" }}>›</button>
       </div>
-
-      {/* Jours de la semaine */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: ".5rem .8rem .3rem" }}>
-        {DAYS_FR.map((d, i) => (
-          <div key={i} style={{ textAlign: "center", fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".2em", color: "rgba(245,240,232,.2)", padding: ".3rem 0" }}>{d}</div>
-        ))}
+        {DAYS_FR.map((d, i) => <div key={i} style={{ textAlign: "center", fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".2em", color: "rgba(245,240,232,.2)", padding: ".3rem 0" }}>{d}</div>)}
       </div>
-
-      {/* Grille dates */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: ".2rem .8rem .8rem" }}>
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
-          const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-          const dateObj = new Date(dateStr + "T12:00:00");
-          const isPast  = dateObj < today;
+          const dateStr  = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const dateObj  = new Date(dateStr + "T12:00:00");
+          const isPast   = dateObj < today;
           const hasDispo = dayCache[dateStr] === true;
           const noSlot   = dayCache[dateStr] === false;
           const isLoading = dayCache[dateStr] === undefined;
-          const isSel   = dateStr === selDate;
-          const isToday = dateObj.toDateString() === today.toDateString();
-
+          const isSel    = dateStr === selDate;
+          const isToday  = dateObj.toDateString() === today.toDateString();
           return (
-            <button key={i} onClick={() => !isPast && hasDispo && onSelectDate(dateStr)}
-              style={{
-                background: isSel ? "var(--creme)" : "transparent",
-                border: isToday && !isSel ? "1px solid rgba(245,240,232,.2)" : "1px solid transparent",
-                borderRadius: "4px", margin: "2px",
-                padding: ".45rem .2rem",
-                fontFamily: "var(--f-sans)", fontSize: ".75rem", fontWeight: isSel ? 600 : 400,
-                color: isSel ? "var(--texte)" : isPast || noSlot ? "rgba(245,240,232,.12)" : isLoading ? "rgba(245,240,232,.3)" : "var(--creme)",
-                cursor: hasDispo && !isPast ? "pointer" : "default",
-                position: "relative",
-                transition: "all .15s",
-              }}
+            <button key={i} onClick={() => !isPast && hasDispo && onSelectDate(dateStr)} style={{
+              background: isSel ? "var(--creme)" : "transparent",
+              border: isToday && !isSel ? "1px solid rgba(245,240,232,.2)" : "1px solid transparent",
+              borderRadius: "4px", margin: "2px", padding: ".45rem .2rem",
+              fontFamily: "var(--f-sans)", fontSize: ".75rem", fontWeight: isSel ? 600 : 400,
+              color: isSel ? "var(--texte)" : isPast || noSlot ? "rgba(245,240,232,.12)" : isLoading ? "rgba(245,240,232,.3)" : "var(--creme)",
+              cursor: hasDispo && !isPast ? "pointer" : "default", position: "relative", transition: "all .15s",
+            }}
               onMouseEnter={e => { if (hasDispo && !isPast && !isSel) e.currentTarget.style.background = "rgba(245,240,232,.08)"; }}
               onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
             >
               {day}
-              {/* Point vert = dispo */}
               {hasDispo && !isPast && !isSel && (
                 <span style={{ position: "absolute", bottom: "3px", left: "50%", transform: "translateX(-50%)", width: "3px", height: "3px", borderRadius: "50%", background: "rgba(39,174,96,.7)" }} />
               )}
@@ -148,22 +154,112 @@ function CalendarPicker({ year, month, dayCache, loadingMonth, selDate, onPrev, 
   );
 }
 
+// ── Auth inline (étape confirmation) ──────────────────────────
+type AuthMode = "login" | "register";
+
+function InlineAuth({ onSuccess }: { onSuccess: (phone: string) => void }) {
+  const [mode, setMode]     = useState<AuthMode>("register");
+  const [name, setName]     = useState("");
+  const [email, setEmail]   = useState("");
+  const [phone, setPhone]   = useState("");
+  const [pwd, setPwd]       = useState("");
+  const [error, setError]   = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const fi = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderBottomColor = "var(--creme)"; };
+  const fo = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderBottomColor = "rgba(245,240,232,.15)"; };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(""); setLoading(true);
+    try {
+      if (mode === "register") {
+        if (!phone.trim()) { setError("Le numéro de téléphone est obligatoire."); setLoading(false); return; }
+        const cred = await createUserWithEmailAndPassword(auth, email, pwd);
+        await updateProfile(cred.user, { displayName: name });
+        // Le téléphone est collecté séparément et stocké dans le booking
+      } else {
+        await signInWithEmailAndPassword(auth, email, pwd);
+      }
+      onSuccess(mode === "register" ? phone : "");
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code === "auth/email-already-in-use") setError("Email déjà utilisé — connectez-vous.");
+      else if (code === "auth/invalid-credential") setError("Email ou mot de passe incorrect.");
+      else if (code === "auth/weak-password") setError("Mot de passe trop court (6 caractères min).");
+      else setError("Une erreur est survenue.");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ border: "1px solid rgba(245,240,232,.08)", padding: "1.5rem" }}>
+      <div style={{ display: "flex", gap: "0", marginBottom: "1.5rem", borderBottom: "1px solid rgba(245,240,232,.07)" }}>
+        {(["register","login"] as AuthMode[]).map(m => (
+          <button key={m} onClick={() => { setMode(m); setError(""); }} style={{
+            padding: ".6rem 1.2rem", background: "none", border: "none",
+            borderBottom: `2px solid ${mode === m ? "var(--creme)" : "transparent"}`,
+            fontFamily: "var(--f-sans)", fontSize: ".65rem", fontWeight: mode === m ? 600 : 400,
+            color: mode === m ? "var(--creme)" : "rgba(245,240,232,.3)",
+            cursor: "pointer", marginBottom: "-1px", transition: "all .2s",
+          }}>
+            {m === "register" ? "Créer un compte" : "Se connecter"}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={submit} style={{ display: "grid", gap: "1.2rem" }}>
+        {mode === "register" && (
+          <label>
+            <span style={lbl}>Prénom & Nom</span>
+            <input style={uInp} required value={name} onChange={e => setName(e.target.value)} placeholder="Jean Dupont" onFocus={fi} onBlur={fo} />
+          </label>
+        )}
+        <label>
+          <span style={lbl}>Email</span>
+          <input type="email" style={uInp} required value={email} onChange={e => setEmail(e.target.value)} placeholder="jean@email.fr" onFocus={fi} onBlur={fo} />
+        </label>
+        {mode === "register" && (
+          <label>
+            <span style={lbl}>Téléphone <span style={{ color: "rgba(245,240,232,.5)" }}>*</span></span>
+            <input type="tel" style={uInp} required value={phone} onChange={e => setPhone(e.target.value)} placeholder="06 12 34 56 78" onFocus={fi} onBlur={fo} />
+          </label>
+        )}
+        <label>
+          <span style={lbl}>Mot de passe</span>
+          <input type="password" style={uInp} required value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••" onFocus={fi} onBlur={fo} />
+        </label>
+        {error && <p style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "#e74c3c" }}>{error}</p>}
+        <button type="submit" disabled={loading} style={{
+          display: "inline-flex", alignItems: "center", gap: ".8rem",
+          background: "var(--creme)", color: "var(--texte)",
+          fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500,
+          border: "none", padding: ".75rem 1.1rem .75rem 1.8rem",
+          borderRadius: "100px", cursor: "pointer", opacity: loading ? .6 : 1, alignSelf: "flex-start",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--or-clair)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "var(--creme)"; }}
+        >
+          {loading ? "Chargement…" : mode === "register" ? "Créer mon compte & confirmer" : "Me connecter & confirmer"}
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: "var(--texte)", color: "var(--creme)", fontSize: ".75rem" }}>↗</span>
+        </button>
+      </form>
+
+    </div>
+  );
+}
+
 // ── Composant principal ────────────────────────────────────────
 export default function Booking() {
   const { user } = useAuth();
-  const [showAuth, setShowAuth] = useState(false);
-  const [step, setStep]         = useState(0);
-  const [done, setDone]         = useState(false);
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState(false);
 
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff]       = useState<Staff[]>([]);
   const [slots, setSlots]       = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
-  // Calendrier
   const [calYear, setCalYear]   = useState(() => new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
-  // Cache dispo par date "YYYY-MM-DD" → boolean (true = au moins 1 créneau)
   const [dayCache, setDayCache] = useState<Record<string, boolean>>({});
   const [loadingMonth, setLoadingMonth] = useState(false);
 
@@ -171,20 +267,16 @@ export default function Booking() {
   const [selStaff, setSelStaff]     = useState<Staff | null>(null);
   const [selDate, setSelDate]       = useState("");
   const [selTime, setSelTime]       = useState("");
-  const [phone, setPhone]           = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  // Charger services + staff
+  // Téléphone collecté dans l'auth inline (étape 3)
+  const [pendingPhone, setPendingPhone] = useState("");
+  const [submitting, setSubmitting]     = useState(false);
+
   useEffect(() => {
-    getDocs(collection(db, "services")).then(snap => {
-      setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Service)));
-    });
-    getDocs(collection(db, "staff")).then(snap => {
-      setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() } as Staff)));
-    });
+    getDocs(collection(db, "services")).then(snap => setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Service))));
+    getDocs(collection(db, "staff")).then(snap => setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() } as Staff))));
   }, []);
 
-  // Pré-charger les dispos du mois affiché dès qu'on arrive à l'étape calendrier
   useEffect(() => {
     if (!selStaff || !selService || step !== 2) return;
     loadMonthAvailability(calYear, calMonth);
@@ -199,8 +291,7 @@ export default function Booking() {
     const checks: Promise<void>[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-      const dateObj = new Date(dateStr + "T12:00:00");
-      if (dateObj < today) { results[dateStr] = false; continue; }
+      if (new Date(dateStr + "T12:00:00") < today) { results[dateStr] = false; continue; }
       checks.push(
         getAvailableSlots(selStaff.id, selStaff, dateStr, selService.duration)
           .then(s => { results[dateStr] = s.length > 0; })
@@ -212,7 +303,6 @@ export default function Booking() {
     setLoadingMonth(false);
   };
 
-  // Charger créneaux quand une date est sélectionnée
   useEffect(() => {
     if (!selStaff || !selDate || !selService) return;
     setLoadingSlots(true); setSlots([]); setSelTime("");
@@ -221,36 +311,36 @@ export default function Booking() {
       .finally(() => setLoadingSlots(false));
   }, [selStaff, selDate, selService]);
 
-  const today = new Date().toISOString().split("T")[0];
+  // Quand l'utilisateur vient de se connecter/inscrire à l'étape 3, on envoie le RDV
+  useEffect(() => {
+    if (user && step === 3 && !done && !submitting) {
+      submitBooking(user.uid, user.email ?? "", user.displayName ?? "", pendingPhone);
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const confirm = async () => {
-    if (!user || !selService || !selStaff || !selDate || !selTime) return;
+  const submitBooking = async (uid: string, email: string, name: string, phone: string) => {
+    if (!selService || !selStaff || !selDate || !selTime) return;
     setSubmitting(true);
     try {
       await addDoc(collection(db, "bookings"), {
-        userId:          user.uid,
-        userEmail:       user.email,
-        userName:        user.displayName || user.email,
-        userPhone:       phone,
-        staffId:         selStaff.id,
-        staffName:       selStaff.name,
-        serviceId:       selService.id,
-        serviceName:     selService.name,
-        serviceDuration: selService.duration,
-        date:            selDate,
-        startTime:       selTime,
-        endTime:         addMinutes(selTime, selService.duration),
-        status:          "pending",
-        createdAt:       serverTimestamp(),
+        userId: uid, userEmail: email, userName: name, userPhone: phone,
+        staffId: selStaff.id, staffName: selStaff.name,
+        serviceId: selService.id, serviceName: selService.name, serviceDuration: selService.duration,
+        date: selDate, startTime: selTime, endTime: addMinutes(selTime, selService.duration),
+        status: "pending", createdAt: serverTimestamp(),
       });
       setDone(true);
-    } catch { /* silently fail */ } finally { setSubmitting(false); }
+    } catch { /* silent */ } finally { setSubmitting(false); }
   };
 
   const reset = () => {
     setStep(0); setDone(false);
     setSelService(null); setSelStaff(null);
-    setSelDate(""); setSelTime(""); setPhone("");
+    setSelDate(""); setSelTime(""); setPendingPhone("");
+  };
+
+  const handleAuthSuccess = (phone: string) => {
+    setPendingPhone(phone);
   };
 
   return (
@@ -258,7 +348,7 @@ export default function Booking() {
       <div className="wrap">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "8rem", alignItems: "start" }}>
 
-          {/* Gauche — titre + infos */}
+          {/* ── Gauche ── */}
           <div>
             <p style={{ fontFamily: "var(--f-sans)", fontSize: ".52rem", letterSpacing: ".45em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: "1rem" }}>Aurum Studio</p>
             <h2 style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "clamp(2.5rem, 5vw, 6rem)", color: "var(--creme)", lineHeight: .9, letterSpacing: "-.03em", marginBottom: "2.5rem" }}>
@@ -273,8 +363,7 @@ export default function Booking() {
               ))}
             </div>
 
-            {/* Compte */}
-            {user ? (
+            {user && (
               <div style={{ marginTop: "2.5rem", padding: "1.2rem 1.5rem", border: "1px solid rgba(245,240,232,.1)" }}>
                 <p style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.3)", marginBottom: ".4rem" }}>Connecté en tant que</p>
                 <p style={{ fontFamily: "var(--f-sans)", fontWeight: 500, fontSize: ".82rem", color: "rgba(245,240,232,.7)" }}>{user.displayName || user.email}</p>
@@ -282,41 +371,30 @@ export default function Booking() {
                   Se déconnecter
                 </button>
               </div>
-            ) : (
-              <button onClick={() => setShowAuth(true)} style={{ marginTop: "2.5rem", display: "inline-flex", alignItems: "center", gap: ".7rem", background: "rgba(245,240,232,.07)", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".65rem", letterSpacing: ".1em", color: "rgba(245,240,232,.6)", cursor: "pointer", transition: "all .2s" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(245,240,232,.12)"; e.currentTarget.style.color = "var(--creme)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(245,240,232,.07)"; e.currentTarget.style.color = "rgba(245,240,232,.6)"; }}>
-                Se connecter pour réserver →
-              </button>
             )}
           </div>
 
-          {/* Droite — wizard */}
+          {/* ── Droite — wizard ── */}
           <div>
             <AnimatePresence mode="wait">
+
+              {/* Succès */}
               {done ? (
                 <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                   <p style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "2rem", color: "var(--creme)", letterSpacing: "-.02em", marginBottom: ".8rem" }}>Demande envoyée ✓</p>
                   <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".85rem", color: "rgba(245,240,232,.4)", lineHeight: 1.7, marginBottom: ".8rem" }}>
-                    Votre rendez-vous avec <strong style={{ color: "rgba(245,240,232,.7)", fontWeight: 500 }}>{selStaff?.name}</strong> le <strong style={{ color: "rgba(245,240,232,.7)", fontWeight: 500 }}>{selDate} à {selTime}</strong> est en attente de confirmation.
+                    Votre rendez-vous avec <strong style={{ color: "rgba(245,240,232,.7)", fontWeight: 500 }}>{selStaff?.name}</strong> le{" "}
+                    <strong style={{ color: "rgba(245,240,232,.7)", fontWeight: 500 }}>
+                      {selDate && new Date(selDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} à {selTime}
+                    </strong> est en attente de confirmation.
                   </p>
-                  <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".8rem", color: "rgba(245,240,232,.3)", marginBottom: "2rem" }}>Vous recevrez un email de confirmation sous 24 heures.</p>
+                  <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".8rem", color: "rgba(245,240,232,.3)", marginBottom: "2rem" }}>Vous recevrez une confirmation sous 24 heures.</p>
                   <button onClick={reset} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: "var(--creme)", color: "var(--texte)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: "pointer" }}>
                     Nouveau rendez-vous
                     <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: "var(--texte)", color: "var(--creme)", fontSize: ".75rem" }}>↗</span>
                   </button>
                 </motion.div>
-              ) : !user ? (
-                <motion.div key="noauth" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <div style={{ border: "1px solid rgba(245,240,232,.08)", padding: "3rem", textAlign: "center" }}>
-                    <p style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "1.2rem", color: "var(--creme)", marginBottom: ".8rem" }}>Connexion requise</p>
-                    <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".82rem", color: "rgba(245,240,232,.4)", marginBottom: "2rem", lineHeight: 1.6 }}>Créez un compte ou connectez-vous pour réserver en ligne.</p>
-                    <button onClick={() => setShowAuth(true)} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: "var(--creme)", color: "var(--texte)", fontFamily: "var(--f-sans)", fontSize: ".72rem", fontWeight: 500, border: "none", padding: ".75rem 1.1rem .75rem 1.8rem", borderRadius: "100px", cursor: "pointer" }}>
-                      Se connecter
-                      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: "var(--texte)", color: "var(--creme)", fontSize: ".75rem" }}>↗</span>
-                    </button>
-                  </div>
-                </motion.div>
+
               ) : (
                 <motion.div key="wizard" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <Steps current={step} />
@@ -329,13 +407,10 @@ export default function Booking() {
                         {services.map(s => (
                           <Pill key={s.id} label={s.name}
                             sub={`${s.duration} min — ${s.price ? s.price + " €" : "Sur devis"}`}
-                            active={selService?.id === s.id}
-                            onClick={() => setSelService(s)} />
+                            active={selService?.id === s.id} onClick={() => setSelService(s)} />
                         ))}
                       </div>
-                      <button disabled={!selService} onClick={() => setStep(1)} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: selService ? "var(--creme)" : "rgba(245,240,232,.1)", color: selService ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: selService ? "pointer" : "not-allowed", transition: "all .2s" }}>
-                        Continuer <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", background: selService ? "var(--texte)" : "rgba(245,240,232,.1)", color: selService ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".7rem" }}>→</span>
-                      </button>
+                      <NextBtn disabled={!selService} onClick={() => setStep(1)} />
                     </div>
                   )}
 
@@ -343,51 +418,38 @@ export default function Booking() {
                   {step === 1 && (
                     <div>
                       <p style={lbl}>Choisissez votre coiffeur(se)</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2px", marginBottom: "2rem" }}>
+                      <div style={{ display: "grid", gap: "2px", marginBottom: "2rem" }}>
                         {staff.map(s => (
                           <Pill key={s.id} label={s.name} sub={s.role} active={selStaff?.id === s.id} onClick={() => setSelStaff(s)} />
                         ))}
                       </div>
                       <div style={{ display: "flex", gap: "1rem" }}>
-                        <button onClick={() => setStep(0)} style={{ background: "none", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", color: "rgba(245,240,232,.4)", cursor: "pointer" }}>← Retour</button>
-                        <button disabled={!selStaff} onClick={() => setStep(2)} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: selStaff ? "var(--creme)" : "rgba(245,240,232,.1)", color: selStaff ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: selStaff ? "pointer" : "not-allowed", transition: "all .2s" }}>
-                          Continuer <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", background: selStaff ? "var(--texte)" : "rgba(245,240,232,.1)", color: selStaff ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".7rem" }}>→</span>
-                        </button>
+                        <BackBtn onClick={() => setStep(0)} />
+                        <NextBtn disabled={!selStaff} onClick={() => setStep(2)} />
                       </div>
                     </div>
                   )}
 
-                  {/* ÉTAPE 2 — Calendrier + Créneau */}
+                  {/* ÉTAPE 2 — Calendrier + créneaux */}
                   {step === 2 && (
                     <div>
-                      {/* ── Mini-calendrier ── */}
                       <CalendarPicker
                         year={calYear} month={calMonth}
-                        dayCache={dayCache} loadingMonth={loadingMonth}
-                        selDate={selDate}
-                        onPrev={() => {
-                          const d = new Date(calYear, calMonth - 1, 1);
-                          setCalYear(d.getFullYear()); setCalMonth(d.getMonth());
-                          setSelDate(""); setSlots([]);
-                        }}
-                        onNext={() => {
-                          const d = new Date(calYear, calMonth + 1, 1);
-                          setCalYear(d.getFullYear()); setCalMonth(d.getMonth());
-                          setSelDate(""); setSlots([]);
-                        }}
+                        dayCache={dayCache} loadingMonth={loadingMonth} selDate={selDate}
+                        onPrev={() => { const d = new Date(calYear, calMonth-1, 1); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); setSelDate(""); setSlots([]); }}
+                        onNext={() => { const d = new Date(calYear, calMonth+1, 1); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); setSelDate(""); setSlots([]); }}
                         onSelectDate={d => { setSelDate(d); setSelTime(""); }}
                       />
 
-                      {/* ── Créneaux ── */}
                       {selDate && (
                         <div style={{ marginTop: "1.5rem" }}>
                           <p style={lbl}>
-                            Créneaux disponibles — {new Date(selDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                            Créneaux — {new Date(selDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
                           </p>
                           {loadingSlots ? (
                             <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.3)" }}>Chargement…</p>
                           ) : slots.length === 0 ? (
-                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.3)" }}>Aucun créneau disponible ce jour.</p>
+                            <p style={{ fontFamily: "var(--f-sans)", fontSize: ".78rem", color: "rgba(245,240,232,.3)" }}>Aucun créneau disponible.</p>
                           ) : (
                             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: ".6rem", marginBottom: ".5rem" }}>
                               {slots.map(s => (
@@ -405,52 +467,71 @@ export default function Booking() {
                       )}
 
                       <div style={{ display: "flex", gap: "1rem", marginTop: "1.8rem" }}>
-                        <button onClick={() => setStep(1)} style={{ background: "none", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", color: "rgba(245,240,232,.4)", cursor: "pointer" }}>← Retour</button>
-                        <button disabled={!selDate || !selTime} onClick={() => setStep(3)} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: (selDate && selTime) ? "var(--creme)" : "rgba(245,240,232,.1)", color: (selDate && selTime) ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: (selDate && selTime) ? "pointer" : "not-allowed", transition: "all .2s" }}>
-                          Continuer <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", background: (selDate && selTime) ? "var(--texte)" : "rgba(245,240,232,.1)", color: (selDate && selTime) ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".7rem" }}>→</span>
-                        </button>
+                        <BackBtn onClick={() => setStep(1)} />
+                        <NextBtn disabled={!selDate || !selTime} onClick={() => setStep(3)} />
                       </div>
                     </div>
                   )}
 
-                  {/* ÉTAPE 3 — Confirmation */}
+                  {/* ÉTAPE 3 — Confirmation + auth */}
                   {step === 3 && (
                     <div>
-                      <p style={lbl}>Résumé de votre rendez-vous</p>
+                      {/* Récap */}
+                      <p style={lbl}>Votre rendez-vous</p>
                       <div style={{ border: "1px solid rgba(245,240,232,.08)", marginBottom: "1.5rem" }}>
                         {[
                           ["Prestation", selService?.name],
                           ["Durée", `${selService?.duration} min`],
                           ["Prix", selService?.price ? `${selService.price} €` : "Sur devis"],
                           ["Coiffeur(se)", selStaff?.name],
-                          ["Date", selDate],
+                          ["Date", selDate && new Date(selDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })],
                           ["Heure", `${selTime} → ${selService ? addMinutes(selTime, selService.duration) : ""}`],
                         ].map(([l, v], i) => (
-                          <div key={String(l)} style={{ display: "flex", justifyContent: "space-between", padding: ".9rem 1.2rem", borderBottom: i < 5 ? "1px solid rgba(245,240,232,.05)" : "none" }}>
-                            <span style={lbl as React.CSSProperties}>{l}</span>
+                          <div key={String(l)} style={{ display: "flex", justifyContent: "space-between", padding: ".8rem 1.2rem", borderBottom: i < 5 ? "1px solid rgba(245,240,232,.05)" : "none" }}>
+                            <span style={{ ...lbl, marginBottom: 0 } as React.CSSProperties}>{l}</span>
                             <span style={val}>{v}</span>
                           </div>
                         ))}
                       </div>
 
-                      <label style={{ display: "block", marginBottom: "2rem" }}>
-                        <span style={lbl}>Téléphone (optionnel)</span>
-                        <input style={{ background: "transparent", border: "none", borderBottom: "1px solid rgba(245,240,232,.15)", padding: ".65rem 0", color: "var(--creme)", fontFamily: "var(--f-sans)", fontSize: ".9rem", outline: "none", width: "100%", transition: "border-color .2s" }}
-                          value={phone} onChange={e => setPhone(e.target.value)} placeholder="06 …"
-                          onFocus={e => { e.target.style.borderBottomColor = "var(--creme)"; }}
-                          onBlur={e => { e.target.style.borderBottomColor = "rgba(245,240,232,.15)"; }}
-                        />
-                      </label>
-
-                      <div style={{ display: "flex", gap: "1rem" }}>
-                        <button onClick={() => setStep(2)} style={{ background: "none", border: "1px solid rgba(245,240,232,.12)", padding: ".7rem 1.4rem", fontFamily: "var(--f-sans)", fontSize: ".7rem", color: "rgba(245,240,232,.4)", cursor: "pointer" }}>← Retour</button>
-                        <button onClick={confirm} disabled={submitting} style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: "var(--creme)", color: "var(--texte)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: "pointer", opacity: submitting ? .6 : 1 }}
-                          onMouseEnter={e => { e.currentTarget.style.background = "var(--or-clair)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = "var(--creme)"; }}>
-                          {submitting ? "Envoi…" : "Confirmer le rendez-vous"}
-                          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: "var(--texte)", color: "var(--creme)", fontSize: ".75rem" }}>↗</span>
-                        </button>
-                      </div>
+                      {/* Auth ou bouton direct si déjà connecté */}
+                      {user ? (
+                        <>
+                          <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".78rem", color: "rgba(245,240,232,.35)", marginBottom: "1.2rem" }}>
+                            Connecté en tant que <strong style={{ color: "rgba(245,240,232,.6)" }}>{user.displayName || user.email}</strong>
+                          </p>
+                          <label style={{ display: "block", marginBottom: "1.5rem" }}>
+                            <span style={lbl}>Téléphone <span style={{ color: "rgba(245,240,232,.4)" }}>*</span></span>
+                            <input type="tel" required style={uInp} value={pendingPhone} onChange={e => setPendingPhone(e.target.value)} placeholder="06 12 34 56 78"
+                              onFocus={e => { e.target.style.borderBottomColor = "var(--creme)"; }}
+                              onBlur={e => { e.target.style.borderBottomColor = "rgba(245,240,232,.15)"; }}
+                            />
+                          </label>
+                          <div style={{ display: "flex", gap: "1rem" }}>
+                            <BackBtn onClick={() => setStep(2)} />
+                            <button
+                              onClick={() => submitBooking(user.uid, user.email ?? "", user.displayName ?? "", pendingPhone)}
+                              disabled={submitting || !pendingPhone.trim()}
+                              style={{ display: "inline-flex", alignItems: "center", gap: ".7rem", background: pendingPhone.trim() ? "var(--creme)" : "rgba(245,240,232,.1)", color: pendingPhone.trim() ? "var(--texte)" : "rgba(245,240,232,.3)", fontFamily: "var(--f-sans)", fontSize: ".7rem", fontWeight: 500, border: "none", padding: ".7rem 1rem .7rem 1.6rem", borderRadius: "100px", cursor: pendingPhone.trim() ? "pointer" : "not-allowed", opacity: submitting ? .6 : 1 }}
+                              onMouseEnter={e => { if (pendingPhone.trim()) e.currentTarget.style.background = "var(--or-clair)"; }}
+                              onMouseLeave={e => { if (pendingPhone.trim()) e.currentTarget.style.background = "var(--creme)"; }}
+                            >
+                              {submitting ? "Envoi…" : "Confirmer le rendez-vous"}
+                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "26px", borderRadius: "50%", background: pendingPhone.trim() ? "var(--texte)" : "rgba(245,240,232,.1)", color: pendingPhone.trim() ? "var(--creme)" : "rgba(245,240,232,.3)", fontSize: ".75rem" }}>↗</span>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".78rem", color: "rgba(245,240,232,.35)", marginBottom: "1.2rem", lineHeight: 1.6 }}>
+                            Pour finaliser votre réservation, créez un compte ou connectez-vous.
+                          </p>
+                          <InlineAuth onSuccess={(phone) => handleAuthSuccess(phone)} />
+                          <div style={{ marginTop: "1rem" }}>
+                            <BackBtn onClick={() => setStep(2)} />
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -459,8 +540,6 @@ export default function Booking() {
           </div>
         </div>
       </div>
-
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
     </section>
   );
 }
