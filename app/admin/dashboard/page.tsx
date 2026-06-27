@@ -14,31 +14,166 @@ import { seedData } from "@/lib/seed";
 
 type Tab = "bookings" | "closures" | "settings";
 
-const cell: React.CSSProperties = {
-  padding: ".65rem 1rem", fontFamily: "var(--f-sans)", fontSize: ".72rem",
-  color: "rgba(245,240,232,.6)", borderBottom: "1px solid rgba(245,240,232,.05)",
-};
-const th: React.CSSProperties = {
-  ...cell, fontWeight: 600, fontSize: ".48rem", letterSpacing: ".3em",
-  textTransform: "uppercase", color: "rgba(245,240,232,.25)",
-};
 const inp: React.CSSProperties = {
   background: "rgba(245,240,232,.06)", border: "1px solid rgba(245,240,232,.1)",
   padding: ".6rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".78rem",
   color: "var(--creme)", outline: "none",
 };
 
-function Badge({ status }: { status: Booking["status"] }) {
-  const colors: Record<string, string> = {
-    pending:   "rgba(184,148,90,.25)",
-    confirmed: "rgba(39,174,96,.2)",
-    cancelled: "rgba(192,57,43,.2)",
-  };
-  const labels: Record<string, string> = { pending: "En attente", confirmed: "Confirmé", cancelled: "Annulé" };
+// ── Helpers temps ─────────────────────────────────────────────
+function timeToMin(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+function getWeekDates(offset: number): string[] {
+  const now = new Date();
+  const day = now.getDay(); // 0=dim
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d.toISOString().split("T")[0];
+  });
+}
+
+const DAY_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+const STATUS_COLOR: Record<string, { bg: string; border: string; text: string }> = {
+  pending:   { bg: "rgba(184,148,90,.18)",  border: "rgba(184,148,90,.5)",  text: "rgba(245,240,232,.85)" },
+  confirmed: { bg: "rgba(39,174,96,.18)",   border: "rgba(39,174,96,.5)",   text: "rgba(245,240,232,.85)" },
+  cancelled: { bg: "rgba(192,57,43,.15)",   border: "rgba(192,57,43,.4)",   text: "rgba(245,240,232,.4)"  },
+};
+
+// ── Vue planning semaine ───────────────────────────────────────
+const DAY_START = 8 * 60;   // 08:00
+const DAY_END   = 20 * 60;  // 20:00
+const PX_PER_MIN = 1.8;
+
+function WeekPlanning({ bookings, weekDates, onUpdate }: {
+  bookings: Booking[];
+  weekDates: string[];
+  onUpdate: (id: string, status: Booking["status"]) => void;
+}) {
+  const [tooltip, setTooltip] = useState<{ b: Booking; x: number; y: number } | null>(null);
+  const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START / 60 + i);
+  const totalH = (DAY_END - DAY_START) * PX_PER_MIN;
+
   return (
-    <span style={{ background: colors[status], padding: ".25rem .7rem", borderRadius: "100px", fontFamily: "var(--f-sans)", fontSize: ".58rem", letterSpacing: ".15em", textTransform: "uppercase", color: "var(--creme)", whiteSpace: "nowrap" }}>
-      {labels[status]}
-    </span>
+    <div style={{ position: "relative" }}>
+      {/* Grille */}
+      <div style={{ display: "grid", gridTemplateColumns: "48px repeat(7, 1fr)", border: "1px solid rgba(245,240,232,.07)" }}>
+
+        {/* Header jours */}
+        <div style={{ background: "rgba(245,240,232,.03)", borderBottom: "1px solid rgba(245,240,232,.07)" }} />
+        {weekDates.map((date, i) => {
+          const isToday = date === new Date().toISOString().split("T")[0];
+          const dayBookings = bookings.filter(b => b.date === date && b.status !== "cancelled");
+          return (
+            <div key={date} style={{ padding: ".6rem .5rem", borderLeft: "1px solid rgba(245,240,232,.07)", borderBottom: "1px solid rgba(245,240,232,.07)", background: isToday ? "rgba(184,148,90,.06)" : "rgba(245,240,232,.03)", textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--f-sans)", fontSize: ".52rem", letterSpacing: ".2em", color: isToday ? "var(--or)" : "rgba(245,240,232,.3)", textTransform: "uppercase" }}>{DAY_FR[i]}</div>
+              <div style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: ".9rem", color: isToday ? "var(--creme)" : "rgba(245,240,232,.5)", marginTop: ".1rem" }}>{date.slice(8)}</div>
+              {dayBookings.length > 0 && (
+                <div style={{ marginTop: ".3rem", fontFamily: "var(--f-sans)", fontSize: ".45rem", letterSpacing: ".1em", color: "rgba(184,148,90,.7)" }}>{dayBookings.length} rdv</div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Corps — heures + événements */}
+        <div style={{ position: "relative", height: `${totalH}px` }}>
+          {hours.map(h => (
+            <div key={h} style={{ position: "absolute", top: `${(h * 60 - DAY_START) * PX_PER_MIN}px`, left: 0, right: 0, display: "flex", alignItems: "flex-start", paddingTop: "2px" }}>
+              <span style={{ fontFamily: "var(--f-sans)", fontSize: ".45rem", color: "rgba(245,240,232,.2)", paddingRight: "6px", width: "48px", textAlign: "right", lineHeight: 1 }}>{h}h</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Colonnes jours avec RDV */}
+        {weekDates.map((date, di) => {
+          const dayBookings = bookings.filter(b => b.date === date);
+          return (
+            <div key={date} style={{ position: "relative", height: `${totalH}px`, borderLeft: "1px solid rgba(245,240,232,.05)" }}>
+              {/* Lignes heures */}
+              {hours.map(h => (
+                <div key={h} style={{ position: "absolute", top: `${(h * 60 - DAY_START) * PX_PER_MIN}px`, left: 0, right: 0, height: "1px", background: "rgba(245,240,232,.04)" }} />
+              ))}
+              {/* RDV */}
+              {dayBookings.map(b => {
+                const start = timeToMin(b.startTime);
+                const end   = timeToMin(b.endTime);
+                const top   = (start - DAY_START) * PX_PER_MIN;
+                const height = (end - start) * PX_PER_MIN - 2;
+                const c = STATUS_COLOR[b.status] ?? STATUS_COLOR.pending;
+                return (
+                  <div key={b.id}
+                    onClick={e => setTooltip(t => t?.b.id === b.id ? null : { b, x: e.clientX, y: e.clientY })}
+                    style={{
+                      position: "absolute", top: `${top}px`, left: "3px", right: "3px",
+                      height: `${height}px`, background: c.bg,
+                      border: `1px solid ${c.border}`, borderLeft: `3px solid ${c.border}`,
+                      padding: "3px 5px", overflow: "hidden", cursor: "pointer",
+                      transition: "filter .15s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.3)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; }}
+                  >
+                    <div style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".6rem", color: c.text, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {b.startTime} {b.userName}
+                    </div>
+                    {height > 28 && (
+                      <div style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", color: c.text, opacity: .7, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {b.serviceName}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tooltip RDV au clic */}
+      {tooltip && (
+        <>
+          <div onClick={() => setTooltip(null)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+          <div style={{
+            position: "fixed", left: Math.min(tooltip.x + 12, window.innerWidth - 280), top: Math.min(tooltip.y + 8, window.innerHeight - 260),
+            zIndex: 20, background: "#1a1a1a", border: "1px solid rgba(245,240,232,.12)",
+            padding: "1.2rem", width: "260px", boxShadow: "0 8px 32px rgba(0,0,0,.6)",
+          }}>
+            <div style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: ".85rem", color: "var(--creme)", marginBottom: ".8rem" }}>
+              {tooltip.b.startTime} → {tooltip.b.endTime}
+            </div>
+            {[
+              ["Client",     tooltip.b.userName],
+              ["Email",      tooltip.b.userEmail],
+              ["Tél",        tooltip.b.userPhone || "—"],
+              ["Prestation", tooltip.b.serviceName],
+              ["Coiffeur",   tooltip.b.staffName],
+              ["Durée",      `${tooltip.b.serviceDuration} min`],
+            ].map(([l, v]) => (
+              <div key={l} style={{ display: "flex", justifyContent: "space-between", marginBottom: ".4rem" }}>
+                <span style={{ fontFamily: "var(--f-sans)", fontSize: ".52rem", letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(245,240,232,.25)" }}>{l}</span>
+                <span style={{ fontFamily: "var(--f-sans)", fontSize: ".68rem", color: "rgba(245,240,232,.65)", maxWidth: "160px", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v}</span>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: ".5rem", marginTop: ".8rem", paddingTop: ".8rem", borderTop: "1px solid rgba(245,240,232,.07)" }}>
+              {tooltip.b.status === "pending" && <>
+                <button onClick={() => { onUpdate(tooltip.b.id, "confirmed"); setTooltip(null); }} style={{ flex: 1, background: "rgba(39,174,96,.2)", border: "1px solid rgba(39,174,96,.4)", padding: ".4rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(39,200,100,.9)", cursor: "pointer" }}>✓ Confirmer</button>
+                <button onClick={() => { onUpdate(tooltip.b.id, "cancelled"); setTooltip(null); }} style={{ flex: 1, background: "rgba(192,57,43,.15)", border: "1px solid rgba(192,57,43,.35)", padding: ".4rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(220,80,60,.8)", cursor: "pointer" }}>✕ Annuler</button>
+              </>}
+              {tooltip.b.status === "confirmed" && (
+                <button onClick={() => { onUpdate(tooltip.b.id, "cancelled"); setTooltip(null); }} style={{ flex: 1, background: "rgba(192,57,43,.15)", border: "1px solid rgba(192,57,43,.35)", padding: ".4rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(220,80,60,.8)", cursor: "pointer" }}>✕ Annuler</button>
+              )}
+              {tooltip.b.status === "cancelled" && (
+                <button onClick={() => { onUpdate(tooltip.b.id, "pending"); setTooltip(null); }} style={{ flex: 1, background: "rgba(184,148,90,.15)", border: "1px solid rgba(184,148,90,.35)", padding: ".4rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(184,148,90,.9)", cursor: "pointer" }}>↩ Remettre</button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -48,8 +183,8 @@ export default function AdminDashboard() {
   const [tab, setTab]           = useState<Tab>("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [closures, setClosures] = useState<Closure[]>([]);
-  const [filterDate, setFilterDate]     = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [viewMode, setViewMode]     = useState<"week" | "list">("week");
 
   const [clDate, setClDate]     = useState("");
   const [clAllDay, setClAllDay] = useState(true);
@@ -105,11 +240,8 @@ export default function AdminDashboard() {
     setSeeding(false);
   };
 
-  const filteredBookings = bookings.filter(b => {
-    if (filterDate && b.date !== filterDate) return false;
-    if (filterStatus !== "all" && b.status !== filterStatus) return false;
-    return true;
-  });
+  const weekDates = getWeekDates(weekOffset);
+  const weekBookings = bookings.filter(b => weekDates.includes(b.date));
 
   if (loading || !user) return null;
 
@@ -148,68 +280,82 @@ export default function AdminDashboard() {
         {/* ── Rendez-vous ─────────────────────────────────────────────── */}
         {tab === "bookings" && (
           <>
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={inp} />
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
-                <option value="all">Tous les statuts</option>
-                <option value="pending">En attente</option>
-                <option value="confirmed">Confirmé</option>
-                <option value="cancelled">Annulé</option>
-              </select>
-              {(filterDate || filterStatus !== "all") && (
-                <button onClick={() => { setFilterDate(""); setFilterStatus("all"); }} style={{ ...inp, cursor: "pointer", color: "rgba(245,240,232,.4)" }}>Réinitialiser</button>
-              )}
-              <span style={{ marginLeft: "auto", fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.25)", alignSelf: "center" }}>
-                {filteredBookings.length} résultat{filteredBookings.length !== 1 ? "s" : ""}
-              </span>
+            {/* Barre navigation semaine */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                <button onClick={() => setWeekOffset(w => w - 1)} style={{ ...inp, cursor: "pointer", padding: ".5rem .9rem", fontSize: ".8rem" }}>←</button>
+                <div style={{ textAlign: "center" }}>
+                  <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: "var(--creme)" }}>
+                    {new Date(weekDates[0] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
+                    {" — "}
+                    {new Date(weekDates[6] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                </div>
+                <button onClick={() => setWeekOffset(w => w + 1)} style={{ ...inp, cursor: "pointer", padding: ".5rem .9rem", fontSize: ".8rem" }}>→</button>
+                {weekOffset !== 0 && (
+                  <button onClick={() => setWeekOffset(0)} style={{ ...inp, cursor: "pointer", fontSize: ".62rem", color: "rgba(245,240,232,.4)", padding: ".5rem .8rem" }}>Aujourd&apos;hui</button>
+                )}
+              </div>
+
+              {/* Légende + toggle vue */}
+              <div style={{ display: "flex", alignItems: "center", gap: "1.2rem" }}>
+                {[["pending","rgba(184,148,90,.5)","En attente"],["confirmed","rgba(39,174,96,.5)","Confirmé"],["cancelled","rgba(192,57,43,.4)","Annulé"]].map(([, color, label]) => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }} />
+                    <span style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", letterSpacing: ".15em", color: "rgba(245,240,232,.3)", textTransform: "uppercase" }}>{label}</span>
+                  </div>
+                ))}
+                <div style={{ display: "flex", border: "1px solid rgba(245,240,232,.1)" }}>
+                  {(["week","list"] as const).map(v => (
+                    <button key={v} onClick={() => setViewMode(v)} style={{ padding: ".4rem .8rem", background: viewMode === v ? "rgba(245,240,232,.1)" : "transparent", border: "none", fontFamily: "var(--f-sans)", fontSize: ".55rem", letterSpacing: ".15em", textTransform: "uppercase", color: viewMode === v ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer" }}>
+                      {v === "week" ? "Agenda" : "Liste"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div style={{ border: "1px solid rgba(245,240,232,.07)", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Date","Heure","Client","Prestation","Coiffeur(se)","Durée","Statut","Actions"].map(h => (
-                      <th key={h} style={th}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBookings.length === 0 ? (
-                    <tr><td colSpan={8} style={{ ...cell, textAlign: "center", color: "rgba(245,240,232,.2)", padding: "3rem" }}>Aucun rendez-vous</td></tr>
-                  ) : filteredBookings.map(b => (
-                    <tr key={b.id}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(245,240,232,.03)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
-                      <td style={cell}>{b.date}</td>
-                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{b.startTime} → {b.endTime}</td>
-                      <td style={cell}>
-                        <div style={{ fontWeight: 500, color: "var(--creme)" }}>{b.userName}</div>
-                        <div style={{ fontSize: ".6rem", color: "rgba(245,240,232,.3)", marginTop: ".1rem" }}>{b.userEmail}</div>
-                        {b.userPhone && <div style={{ fontSize: ".6rem", color: "rgba(245,240,232,.25)", marginTop: ".1rem" }}>{b.userPhone}</div>}
-                      </td>
-                      <td style={cell}>{b.serviceName}</td>
-                      <td style={cell}>{b.staffName}</td>
-                      <td style={{ ...cell, whiteSpace: "nowrap" }}>{b.serviceDuration} min</td>
-                      <td style={cell}><Badge status={b.status} /></td>
-                      <td style={{ ...cell, whiteSpace: "nowrap" }}>
-                        {b.status === "pending" && (
-                          <>
-                            <button onClick={() => updateStatus(b.id, "confirmed")} style={{ background: "rgba(39,174,96,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(39,200,100,.8)", cursor: "pointer", marginRight: ".4rem" }}>✓ Confirmer</button>
-                            <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕ Annuler</button>
-                          </>
-                        )}
-                        {b.status === "confirmed" && (
-                          <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕ Annuler</button>
-                        )}
-                        {b.status === "cancelled" && (
-                          <button onClick={() => updateStatus(b.id, "pending")} style={{ background: "rgba(184,148,90,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(184,148,90,.8)", cursor: "pointer" }}>↩ Remettre</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Vue semaine */}
+            {viewMode === "week" && (
+              <div style={{ overflowX: "auto" }}>
+                <div style={{ minWidth: "900px" }}>
+                  <WeekPlanning bookings={weekBookings} weekDates={weekDates} onUpdate={updateStatus} />
+                </div>
+              </div>
+            )}
+
+            {/* Vue liste */}
+            {viewMode === "list" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                {weekBookings.length === 0 ? (
+                  <p style={{ fontFamily: "var(--f-sans)", fontSize: ".8rem", color: "rgba(245,240,232,.2)", padding: "3rem", textAlign: "center" }}>Aucun rendez-vous cette semaine</p>
+                ) : weekBookings.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map(b => {
+                  const c = STATUS_COLOR[b.status] ?? STATUS_COLOR.pending;
+                  return (
+                    <div key={b.id} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: ".8rem 1rem", background: "rgba(245,240,232,.03)", border: "1px solid rgba(245,240,232,.06)", borderLeft: `3px solid ${c.border}` }}>
+                      <div style={{ minWidth: "80px" }}>
+                        <div style={{ fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(245,240,232,.3)" }}>{new Date(b.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}</div>
+                        <div style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".78rem", color: "var(--creme)" }}>{b.startTime} → {b.endTime}</div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: "var(--f-sans)", fontWeight: 500, fontSize: ".78rem", color: "var(--creme)" }}>{b.userName}</div>
+                        <div style={{ fontFamily: "var(--f-sans)", fontSize: ".62rem", color: "rgba(245,240,232,.3)" }}>{b.userEmail}{b.userPhone ? ` · ${b.userPhone}` : ""}</div>
+                      </div>
+                      <div style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.5)", minWidth: "120px" }}>{b.serviceName}</div>
+                      <div style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.35)", minWidth: "80px" }}>{b.staffName}</div>
+                      <div style={{ display: "flex", gap: ".4rem" }}>
+                        {b.status === "pending" && <>
+                          <button onClick={() => updateStatus(b.id, "confirmed")} style={{ background: "rgba(39,174,96,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(39,200,100,.8)", cursor: "pointer" }}>✓</button>
+                          <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕</button>
+                        </>}
+                        {b.status === "confirmed" && <button onClick={() => updateStatus(b.id, "cancelled")} style={{ background: "rgba(192,57,43,.12)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(220,80,60,.7)", cursor: "pointer" }}>✕</button>}
+                        {b.status === "cancelled" && <button onClick={() => updateStatus(b.id, "pending")} style={{ background: "rgba(184,148,90,.15)", border: "none", padding: ".3rem .7rem", fontFamily: "var(--f-sans)", fontSize: ".58rem", color: "rgba(184,148,90,.8)", cursor: "pointer" }}>↩</button>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
