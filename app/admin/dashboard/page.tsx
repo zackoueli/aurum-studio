@@ -47,7 +47,7 @@ const STATUS_COLOR: Record<string, { bg: string; border: string; text: string }>
 // ── Vue planning semaine ───────────────────────────────────────
 const DAY_START = 8 * 60;   // 08:00
 const DAY_END   = 20 * 60;  // 20:00
-const PX_PER_MIN = 1.8;
+const PX_PER_MIN = 1.1;     // compressé pour tenir en plein écran
 
 function WeekPlanning({ bookings, weekDates, onUpdate }: {
   bookings: Booking[];
@@ -61,7 +61,7 @@ function WeekPlanning({ bookings, weekDates, onUpdate }: {
   return (
     <div style={{ position: "relative" }}>
       {/* Grille */}
-      <div style={{ display: "grid", gridTemplateColumns: "48px repeat(7, 1fr)", border: "1px solid rgba(245,240,232,.07)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "44px repeat(7, 1fr)", border: "1px solid rgba(245,240,232,.07)" }}>
 
         {/* Header jours */}
         <div style={{ background: "rgba(245,240,232,.03)", borderBottom: "1px solid rgba(245,240,232,.07)" }} />
@@ -69,11 +69,11 @@ function WeekPlanning({ bookings, weekDates, onUpdate }: {
           const isToday = date === new Date().toISOString().split("T")[0];
           const dayBookings = bookings.filter(b => b.date === date && b.status !== "cancelled");
           return (
-            <div key={date} style={{ padding: ".6rem .5rem", borderLeft: "1px solid rgba(245,240,232,.07)", borderBottom: "1px solid rgba(245,240,232,.07)", background: isToday ? "rgba(184,148,90,.06)" : "rgba(245,240,232,.03)", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--f-sans)", fontSize: ".52rem", letterSpacing: ".2em", color: isToday ? "var(--or)" : "rgba(245,240,232,.3)", textTransform: "uppercase" }}>{DAY_FR[i]}</div>
-              <div style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: ".9rem", color: isToday ? "var(--creme)" : "rgba(245,240,232,.5)", marginTop: ".1rem" }}>{date.slice(8)}</div>
+            <div key={date} style={{ padding: ".7rem .5rem", borderLeft: "1px solid rgba(245,240,232,.07)", borderBottom: "1px solid rgba(245,240,232,.07)", background: isToday ? "rgba(184,148,90,.06)" : "rgba(245,240,232,.03)", textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--f-sans)", fontSize: ".65rem", letterSpacing: ".15em", color: isToday ? "var(--or)" : "rgba(245,240,232,.35)", textTransform: "uppercase" }}>{DAY_FR[i]}</div>
+              <div style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "1.15rem", color: isToday ? "var(--creme)" : "rgba(245,240,232,.55)", marginTop: ".1rem" }}>{date.slice(8)}</div>
               {dayBookings.length > 0 && (
-                <div style={{ marginTop: ".3rem", fontFamily: "var(--f-sans)", fontSize: ".45rem", letterSpacing: ".1em", color: "rgba(184,148,90,.7)" }}>{dayBookings.length} rdv</div>
+                <div style={{ marginTop: ".25rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(184,148,90,.7)" }}>{dayBookings.length} rdv</div>
               )}
             </div>
           );
@@ -83,13 +83,13 @@ function WeekPlanning({ bookings, weekDates, onUpdate }: {
         <div style={{ position: "relative", height: `${totalH}px` }}>
           {hours.map(h => (
             <div key={h} style={{ position: "absolute", top: `${(h * 60 - DAY_START) * PX_PER_MIN}px`, left: 0, right: 0, display: "flex", alignItems: "flex-start", paddingTop: "2px" }}>
-              <span style={{ fontFamily: "var(--f-sans)", fontSize: ".45rem", color: "rgba(245,240,232,.2)", paddingRight: "6px", width: "48px", textAlign: "right", lineHeight: 1 }}>{h}h</span>
+              <span style={{ fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(245,240,232,.25)", paddingRight: "6px", width: "44px", textAlign: "right", lineHeight: 1 }}>{h}h</span>
             </div>
           ))}
         </div>
 
         {/* Colonnes jours avec RDV */}
-        {weekDates.map((date, di) => {
+        {weekDates.map((date) => {
           const dayBookings = bookings.filter(b => b.date === date);
           return (
             <div key={date} style={{ position: "relative", height: `${totalH}px`, borderLeft: "1px solid rgba(245,240,232,.05)" }}>
@@ -111,17 +111,17 @@ function WeekPlanning({ bookings, weekDates, onUpdate }: {
                       position: "absolute", top: `${top}px`, left: "3px", right: "3px",
                       height: `${height}px`, background: c.bg,
                       border: `1px solid ${c.border}`, borderLeft: `3px solid ${c.border}`,
-                      padding: "3px 5px", overflow: "hidden", cursor: "pointer",
+                      padding: "4px 6px", overflow: "hidden", cursor: "pointer",
                       transition: "filter .15s",
                     }}
                     onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.3)"; }}
                     onMouseLeave={e => { e.currentTarget.style.filter = "brightness(1)"; }}
                   >
-                    <div style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".6rem", color: c.text, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".72rem", color: c.text, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {b.startTime} {b.userName}
                     </div>
-                    {height > 28 && (
-                      <div style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", color: c.text, opacity: .7, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {height > 32 && (
+                      <div style={{ fontFamily: "var(--f-sans)", fontSize: ".65rem", color: c.text, opacity: .75, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {b.serviceName}
                       </div>
                     )}
@@ -264,11 +264,11 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ padding: "2.5rem 3rem" }}>
+      <div style={{ padding: "1.5rem 2rem" }}>
         {/* Tabs */}
         <div style={{ display: "flex", gap: "0", borderBottom: "1px solid rgba(245,240,232,.07)", marginBottom: "2.5rem" }}>
           {([["bookings","Rendez-vous"],["closures","Fermetures"],["settings","Paramètres"]] as [Tab,string][]).map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)} style={{ padding: ".9rem 1.8rem", background: "none", border: "none", borderBottom: `2px solid ${tab === t ? "var(--creme)" : "transparent"}`, fontFamily: "var(--f-sans)", fontSize: ".72rem", fontWeight: tab === t ? 600 : 400, color: tab === t ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer", transition: "all .2s", marginBottom: "-1px" }}>
+            <button key={t} onClick={() => setTab(t)} style={{ padding: ".7rem 1.5rem", background: "none", border: "none", borderBottom: `2px solid ${tab === t ? "var(--creme)" : "transparent"}`, fontFamily: "var(--f-sans)", fontSize: ".82rem", fontWeight: tab === t ? 600 : 400, color: tab === t ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer", transition: "all .2s", marginBottom: "-1px" }}>
               {label}
               {t === "bookings" && pending > 0 && (
                 <span style={{ marginLeft: ".5rem", background: "var(--or)", color: "var(--texte)", borderRadius: "100px", padding: ".1rem .45rem", fontSize: ".5rem", fontWeight: 700 }}>{pending}</span>
@@ -285,7 +285,7 @@ export default function AdminDashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                 <button onClick={() => setWeekOffset(w => w - 1)} style={{ ...inp, cursor: "pointer", padding: ".5rem .9rem", fontSize: ".8rem" }}>←</button>
                 <div style={{ textAlign: "center" }}>
-                  <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: ".82rem", color: "var(--creme)" }}>
+                  <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: "1rem", color: "var(--creme)" }}>
                     {new Date(weekDates[0] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
                     {" — "}
                     {new Date(weekDates[6] + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
@@ -301,8 +301,8 @@ export default function AdminDashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: "1.2rem" }}>
                 {[["pending","rgba(184,148,90,.5)","En attente"],["confirmed","rgba(39,174,96,.5)","Confirmé"],["cancelled","rgba(192,57,43,.4)","Annulé"]].map(([, color, label]) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }} />
-                    <span style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", letterSpacing: ".15em", color: "rgba(245,240,232,.3)", textTransform: "uppercase" }}>{label}</span>
+                    <div style={{ width: "9px", height: "9px", borderRadius: "50%", background: color }} />
+                    <span style={{ fontFamily: "var(--f-sans)", fontSize: ".68rem", letterSpacing: ".1em", color: "rgba(245,240,232,.4)", textTransform: "uppercase" }}>{label}</span>
                   </div>
                 ))}
                 <div style={{ display: "flex", border: "1px solid rgba(245,240,232,.1)" }}>
