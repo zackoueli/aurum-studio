@@ -32,7 +32,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-* { cursor: none; }
+@media (pointer: fine) { * { cursor: none; } }
 
 ::-webkit-scrollbar { width: 2px; }
 ::-webkit-scrollbar-track { background: var(--creme); }
@@ -44,9 +44,9 @@ body {
   margin: 0 auto;
   padding: 0 5rem;
 }
-@media (max-width: 768px) {
-  .wrap { padding: 0 1.5rem; }
-}
+@media (max-width: 1024px) { .wrap { padding: 0 3rem; } }
+@media (max-width: 768px)  { .wrap { padding: 0 1.5rem; } }
+@media (max-width: 480px)  { .wrap { padding: 0 1.2rem; } }
 
 .eyebrow {
   font-family: var(--f-sans);

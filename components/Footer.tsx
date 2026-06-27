@@ -84,8 +84,8 @@ export default function Footer() {
     <footer id="contact" style={{ width: "100%", background: "var(--texte)" }}>
 
       {/* ── Zone principale ── */}
-      <div className="wrap" style={{ padding: "6rem 5rem 5rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 1fr", gap: "4rem", alignItems: "start" }}>
+      <div className="wrap" style={{ padding: "clamp(3rem,6vw,6rem) 0 clamp(2rem,5vw,5rem)" }}>
+        <div className="footer-grid" style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 1fr", gap: "clamp(1.5rem,3vw,4rem)", alignItems: "start" }}>
 
           {/* Colonne 1 — Formulaire contact */}
           <div>
@@ -106,7 +106,7 @@ export default function Footer() {
               </div>
             ) : (
               <form onSubmit={submit} style={{ display: "grid", gap: "1.4rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.4rem" }}>
+                <div className="footer-form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.4rem" }}>
                   <label>
                     <span style={lbl}>Nom</span>
                     <input style={inp} required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Votre nom" onFocus={focusIn} onBlur={focusOut} />
@@ -177,7 +177,7 @@ export default function Footer() {
       <div style={{ width: "100%", height: "1px", background: "rgba(245,240,232,.07)" }} />
 
       {/* ── Bas du footer ── */}
-      <div className="wrap" style={{ padding: "2rem 5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.5rem" }}>
+      <div className="wrap" style={{ padding: "2rem 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.5rem" }}>
 
         {/* Logo */}
         <span style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: ".82rem", letterSpacing: ".06em", color: "rgba(245,240,232,.35)" }}>
@@ -219,6 +219,15 @@ export default function Footer() {
         </div>
       </div>
 
+      <style>{`
+        @media (max-width: 900px) {
+          .footer-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 600px) {
+          .footer-grid { grid-template-columns: 1fr !important; }
+          .footer-form-row { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </footer>
   );
 }

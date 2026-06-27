@@ -352,9 +352,9 @@ export default function Booking() {
   };
 
   return (
-    <section id="reservation" style={{ width: "100%", background: "var(--texte)", padding: "7rem 0" }}>
+    <section id="reservation" style={{ width: "100%", background: "var(--texte)", padding: "clamp(3rem,7vw,7rem) 0" }}>
       <div className="wrap">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "8rem", alignItems: "start" }}>
+        <div className="booking-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "clamp(2rem,6vw,8rem)", alignItems: "start" }}>
 
           {/* ── Gauche ── */}
           <div>
@@ -411,7 +411,7 @@ export default function Booking() {
                   {step === 0 && (
                     <div>
                       <p style={lbl}>Choisissez votre prestation</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", marginBottom: "2rem" }}>
+                      <div className="booking-pills-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", marginBottom: "2rem" }}>
                         {services.map(s => (
                           <Pill key={s.id} label={s.name}
                             sub={`${s.duration} min — ${s.price ? s.price + " €" : "Sur devis"}`}
@@ -541,6 +541,12 @@ export default function Booking() {
           </div>
         </div>
       </div>
+      <style>{`
+        @media (max-width: 768px) {
+          .booking-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
+          .booking-pills-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </section>
   );
 }

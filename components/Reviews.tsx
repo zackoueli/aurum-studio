@@ -50,10 +50,10 @@ export default function Reviews() {
   }, []);
 
   return (
-    <section id="avis" style={{ width: "100%", background: "var(--creme)", padding: "7rem 0", overflow: "hidden", borderTop: "1px solid rgba(26,26,26,.08)" }}>
+    <section id="avis" style={{ width: "100%", background: "var(--creme)", padding: "clamp(3rem,7vw,7rem) 0", overflow: "hidden", borderTop: "1px solid rgba(26,26,26,.08)" }}>
 
       {/* Header */}
-      <div className="wrap" style={{ marginBottom: "4rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      <div className="wrap" style={{ marginBottom: "clamp(2rem,4vw,4rem)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <p style={{ fontFamily: "var(--f-sans)", fontSize: ".55rem", letterSpacing: ".45em", textTransform: "uppercase", color: "var(--gris)", marginBottom: ".6rem" }}>
             Ce qu&apos;ils disent
@@ -77,9 +77,9 @@ export default function Reviews() {
             <div
               key={i}
               style={{
-                width: "420px", flexShrink: 0,
+                width: "clamp(280px, 80vw, 420px)", flexShrink: 0,
                 background: i % 3 === 1 ? "var(--texte)" : "var(--creme2)",
-                padding: "3rem 3rem 2.5rem",
+                padding: "clamp(1.5rem,3vw,3rem) clamp(1.5rem,3vw,3rem) clamp(1.2rem,2.5vw,2.5rem)",
                 display: "flex", flexDirection: "column", justifyContent: "space-between",
                 minHeight: "260px",
               }}

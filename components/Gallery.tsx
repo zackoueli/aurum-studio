@@ -68,8 +68,8 @@ export default function Gallery() {
   }, [photos]);
 
   return (
-    <section id="galerie" ref={sectionRef} style={{ position: "relative", width: "100%", height: "900px", overflow: "hidden", background: "var(--creme2)", cursor: "none", borderTop: "1px solid rgba(26,26,26,.08)" }}>
-      <div style={{ position: "relative", zIndex: 10, padding: "3.5rem 5rem 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", pointerEvents: "none" }}>
+    <section id="galerie" ref={sectionRef} style={{ position: "relative", width: "100%", height: "clamp(480px, 80vw, 900px)", overflow: "hidden", background: "var(--creme2)", cursor: "none", borderTop: "1px solid rgba(26,26,26,.08)" }}>
+      <div style={{ position: "relative", zIndex: 10, padding: "clamp(2rem,4vw,3.5rem) clamp(1.2rem,5vw,5rem) 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", pointerEvents: "none" }}>
         <div>
           <h2 style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "clamp(3rem, 7vw, 8rem)", color: "var(--texte)", lineHeight: .9, letterSpacing: "-.03em" }}>
             PHOTOS /<br />SOUVENIRS

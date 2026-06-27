@@ -47,8 +47,8 @@ export default function Services() {
     <section id="services" style={{ width: "100%", background: "var(--creme)", padding: "6rem 0 5rem" }}>
       <div className="wrap">
 
-        {/* Header — "MENU" vertical + titre */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "4rem", borderBottom: "1px solid rgba(26,26,26,.12)", paddingBottom: "1.5rem" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "3rem", borderBottom: "1px solid rgba(26,26,26,.12)", paddingBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -66,7 +66,7 @@ export default function Services() {
         </div>
 
         {/* Grille 2x2 de catégories */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0", borderLeft: "1px solid rgba(26,26,26,.1)" }}>
+        <div className="services-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0", borderLeft: "1px solid rgba(26,26,26,.1)" }}>
           {categories.map((cat, ci) => (
             <motion.div
               key={cat.name}
@@ -75,9 +75,9 @@ export default function Services() {
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: .6, delay: ci * .08 }}
               style={{
-                padding: "2.5rem 3rem",
+                padding: "clamp(1.2rem, 3vw, 2.5rem) clamp(1.2rem, 3vw, 3rem)",
                 borderRight: "1px solid rgba(26,26,26,.1)",
-                borderBottom: ci < 2 ? "1px solid rgba(26,26,26,.1)" : "none",
+                borderBottom: "1px solid rgba(26,26,26,.1)",
               }}
             >
               {/* Titre catégorie */}
@@ -138,6 +138,12 @@ export default function Services() {
         </div>
 
       </div>
+
+      <style>{`
+        @media (max-width: 600px) {
+          .services-grid { grid-template-columns: 1fr !important; border-left: none !important; }
+        }
+      `}</style>
     </section>
   );
 }
