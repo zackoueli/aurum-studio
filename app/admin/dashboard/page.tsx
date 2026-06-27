@@ -72,7 +72,8 @@ function WeekPlanning({ bookings, staffList, weekDates, onUpdate }: {
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `44px repeat(7, 1fr)`, border: "1px solid rgba(245,240,232,.07)" }}>
+      <div className="week-scroll">
+      <div style={{ display: "grid", gridTemplateColumns: `44px repeat(7, minmax(80px, 1fr))`, border: "1px solid rgba(245,240,232,.07)", minWidth: "560px" }}>
         <div style={{ background: "rgba(245,240,232,.02)", borderBottom: "1px solid rgba(245,240,232,.07)" }} />
         {weekDates.map((date, di) => {
           const isToday = date === today;
@@ -131,6 +132,7 @@ function WeekPlanning({ bookings, staffList, weekDates, onUpdate }: {
           </div>
         ))}
       </div>
+      </div>{/* /week-scroll */}
       {staffList.length > 0 && (
         <div style={{ display: "flex", gap: "1.2rem", marginTop: ".8rem", flexWrap: "wrap" }}>
           {staffList.map((s, si) => (
@@ -342,19 +344,19 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--texte)", color: "var(--creme)" }}>
-      <div style={{ borderBottom: "1px solid rgba(245,240,232,.07)", padding: "1rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+      <div style={{ borderBottom: "1px solid rgba(245,240,232,.07)", padding: "1rem clamp(1rem,2vw,2rem)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <span style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "1rem" }}>Aurum Studio</span>
-          <span style={{ fontFamily: "var(--f-sans)", fontSize: ".5rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", borderLeft: "1px solid rgba(245,240,232,.1)", paddingLeft: "1.5rem" }}>Administration</span>
+          <span className="admin-sub" style={{ fontFamily: "var(--f-sans)", fontSize: ".5rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", borderLeft: "1px solid rgba(245,240,232,.1)", paddingLeft: "1rem" }}>Administration</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-          <a href="/" style={{ fontFamily: "var(--f-sans)", fontSize: ".62rem", letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(245,240,232,.3)", textDecoration: "none" }}>Voir le site</a>
-          <span style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.25)" }}>{user.email}</span>
-          <button onClick={() => signOut(auth).then(() => router.push("/admin/login"))} style={{ background: "none", border: "1px solid rgba(245,240,232,.1)", padding: ".4rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(245,240,232,.35)", cursor: "pointer" }}>Déconnexion</button>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <a href="/" className="admin-site-link" style={{ fontFamily: "var(--f-sans)", fontSize: ".62rem", letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(245,240,232,.3)", textDecoration: "none" }}>Voir le site</a>
+          <span className="admin-email" style={{ fontFamily: "var(--f-sans)", fontSize: ".72rem", color: "rgba(245,240,232,.25)" }}>{user.email}</span>
+          <button onClick={() => signOut(auth).then(() => router.push("/admin/login"))} style={{ background: "none", border: "1px solid rgba(245,240,232,.1)", padding: ".4rem .9rem", fontFamily: "var(--f-sans)", fontSize: ".6rem", letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(245,240,232,.35)", cursor: "pointer", whiteSpace: "nowrap" }}>Déco</button>
         </div>
       </div>
 
-      <div style={{ padding: "1.5rem 2rem" }}>
+      <div style={{ padding: "1.5rem clamp(1rem,2vw,2rem)" }}>
         <div style={{ display: "flex", borderBottom: "1px solid rgba(245,240,232,.07)", marginBottom: "1.5rem", overflowX: "auto" }}>
           {TABS.map(({ key, label, badge }) => (
             <button key={key} onClick={() => setTab(key)} style={{ padding: ".7rem 1.3rem", background: "none", border: "none", borderBottom: `2px solid ${tab === key ? "var(--creme)" : "transparent"}`, fontFamily: "var(--f-sans)", fontSize: ".8rem", fontWeight: tab === key ? 600 : 400, color: tab === key ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer", transition: "all .2s", marginBottom: "-1px", whiteSpace: "nowrap" }}>
@@ -367,14 +369,14 @@ export default function AdminDashboard() {
         {/* ── STATS ──────────────────────────────────────────────── */}
         {tab === "stats" && (
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1px", marginBottom: "2rem" }}>
+            <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1px", marginBottom: "2rem" }}>
               {[
                 { label: "CA semaine (confirmés)", value: caWeek > 0 ? `${caWeek.toFixed(0)} €` : "—", sub: `${confirmedThisWeek.length} rdv confirmés` },
                 { label: "RDV en attente", value: String(pending), sub: "à confirmer" },
                 { label: "Coiffeur le + demandé", value: topStaff?.[0] ?? "—", sub: topStaff ? `${topStaff[1]} rdv` : "" },
                 { label: "Prestation la + demandée", value: topService?.[0] ?? "—", sub: topService ? `${topService[1]} fois` : "" },
               ].map(({ label, value, sub }) => (
-                <div key={label} style={{ background: "rgba(245,240,232,.04)", border: "1px solid rgba(245,240,232,.07)", padding: "1.5rem 2rem" }}>
+                <div key={label} style={{ background: "rgba(245,240,232,.04)", border: "1px solid rgba(245,240,232,.07)", padding: "1.2rem 1.5rem" }}>
                   <p style={{ fontFamily: "var(--f-sans)", fontSize: ".48rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.25)", marginBottom: ".6rem" }}>{label}</p>
                   <p style={{ fontFamily: "var(--f-sans)", fontWeight: 700, fontSize: "1.6rem", color: "var(--or)", letterSpacing: "-.02em", lineHeight: 1 }}>{value}</p>
                   {sub && <p style={{ fontFamily: "var(--f-sans)", fontSize: ".62rem", color: "rgba(245,240,232,.3)", marginTop: ".4rem" }}>{sub}</p>}
@@ -430,22 +432,26 @@ export default function AdminDashboard() {
         {/* ── RENDEZ-VOUS ─────────────────────────────────────────── */}
         {tab === "bookings" && (
           <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: ".8rem" }}>
-                <button onClick={() => setWeekOffset(w => w - 1)} style={{ ...inp, cursor: "pointer", padding: ".45rem .8rem", fontSize: ".85rem" }}>←</button>
-                <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: "1rem", color: "var(--creme)", minWidth: "220px", textAlign: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: ".8rem", marginBottom: "1rem" }}>
+              {/* Ligne 1 : navigation semaine */}
+              <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+                <button onClick={() => setWeekOffset(w => w - 1)} style={{ ...inp, cursor: "pointer", padding: ".4rem .7rem", fontSize: ".85rem" }}>←</button>
+                <span style={{ fontFamily: "var(--f-sans)", fontWeight: 600, fontSize: "clamp(.75rem,1.5vw,1rem)", color: "var(--creme)", flex: 1, textAlign: "center", minWidth: "160px" }}>
                   {new Date(weekDates[0]+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})} — {new Date(weekDates[6]+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}
                 </span>
-                <button onClick={() => setWeekOffset(w => w + 1)} style={{ ...inp, cursor: "pointer", padding: ".45rem .8rem", fontSize: ".85rem" }}>→</button>
-                {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ ...inp, cursor: "pointer", fontSize: ".65rem", color: "rgba(245,240,232,.4)", padding: ".45rem .8rem" }}>Aujourd&apos;hui</button>}
+                <button onClick={() => setWeekOffset(w => w + 1)} style={{ ...inp, cursor: "pointer", padding: ".4rem .7rem", fontSize: ".85rem" }}>→</button>
+                {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ ...inp, cursor: "pointer", fontSize: ".65rem", color: "rgba(245,240,232,.4)", padding: ".4rem .7rem" }}>Aujourd&apos;hui</button>}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                {[["pending","rgba(184,148,90,.6)","En attente"],["confirmed","rgba(39,174,96,.6)","Confirmé"],["cancelled","rgba(192,57,43,.5)","Annulé"]].map(([,color,label]) => (
-                  <div key={label} style={{ display: "flex", alignItems: "center", gap: ".35rem" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }} />
-                    <span style={{ fontFamily: "var(--f-sans)", fontSize: ".65rem", color: "rgba(245,240,232,.35)" }}>{label}</span>
-                  </div>
-                ))}
+              {/* Ligne 2 : légende + toggle */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: ".5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: ".8rem", flexWrap: "wrap" }}>
+                  {[["pending","rgba(184,148,90,.6)","En attente"],["confirmed","rgba(39,174,96,.6)","Confirmé"],["cancelled","rgba(192,57,43,.5)","Annulé"]].map(([,color,label]) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: ".35rem" }}>
+                      <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: color }} />
+                      <span style={{ fontFamily: "var(--f-sans)", fontSize: ".6rem", color: "rgba(245,240,232,.35)" }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
                 <div style={{ display: "flex", border: "1px solid rgba(245,240,232,.1)" }}>
                   {(["week","list"] as const).map(v => (
                     <button key={v} onClick={() => setViewMode(v)} style={{ padding: ".4rem .8rem", background: viewMode===v ? "rgba(245,240,232,.1)" : "transparent", border: "none", fontFamily: "var(--f-sans)", fontSize: ".6rem", letterSpacing: ".1em", textTransform: "uppercase", color: viewMode===v ? "var(--creme)" : "rgba(245,240,232,.3)", cursor: "pointer" }}>
@@ -464,17 +470,16 @@ export default function AdminDashboard() {
                     const si = staffList.findIndex(s => s.id === b.staffId);
                     const ac = STAFF_COLORS[si % STAFF_COLORS.length] || STAFF_COLORS[0];
                     return (
-                      <div key={b.id} style={{ display:"flex", alignItems:"center", gap:"1rem", padding:".75rem 1rem", background:"rgba(245,240,232,.03)", border:"1px solid rgba(245,240,232,.06)", borderLeft:`3px solid ${ac}` }}>
-                        <div style={{ minWidth:"90px" }}>
+                      <div key={b.id} style={{ display:"flex", alignItems:"center", gap:".75rem", padding:".75rem 1rem", background:"rgba(245,240,232,.03)", border:"1px solid rgba(245,240,232,.06)", borderLeft:`3px solid ${ac}`, flexWrap:"wrap" }}>
+                        <div style={{ minWidth:"80px" }}>
                           <div style={{ fontFamily:"var(--f-sans)", fontSize:".6rem", color:"rgba(245,240,232,.3)" }}>{new Date(b.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</div>
-                          <div style={{ fontFamily:"var(--f-sans)", fontWeight:600, fontSize:".78rem", color:"var(--creme)" }}>{b.startTime} → {b.endTime}</div>
+                          <div style={{ fontFamily:"var(--f-sans)", fontWeight:600, fontSize:".75rem", color:"var(--creme)" }}>{b.startTime} → {b.endTime}</div>
                         </div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontFamily:"var(--f-sans)", fontWeight:500, fontSize:".78rem", color:"var(--creme)" }}>{b.userName}</div>
-                          <div style={{ fontFamily:"var(--f-sans)", fontSize:".62rem", color:"rgba(245,240,232,.3)" }}>{b.userEmail}{b.userPhone?` · ${b.userPhone}`:""}</div>
+                        <div style={{ flex:1, minWidth:"120px" }}>
+                          <div style={{ fontFamily:"var(--f-sans)", fontWeight:500, fontSize:".75rem", color:"var(--creme)" }}>{b.userName}</div>
+                          <div style={{ fontFamily:"var(--f-sans)", fontSize:".6rem", color:"rgba(245,240,232,.3)" }}>{b.userEmail}</div>
                         </div>
-                        <div style={{ fontFamily:"var(--f-sans)", fontSize:".72rem", color:"rgba(245,240,232,.5)", minWidth:"120px" }}>{b.serviceName}</div>
-                        <div style={{ fontFamily:"var(--f-sans)", fontSize:".7rem", color:ac, minWidth:"90px" }}>{b.staffName}</div>
+                        <div className="booking-list-svc" style={{ fontFamily:"var(--f-sans)", fontSize:".7rem", color:"rgba(245,240,232,.5)" }}>{b.serviceName} · <span style={{color:ac}}>{b.staffName}</span></div>
                         <div style={{ display:"flex", gap:".4rem" }}>
                           {b.status==="pending"&&<><button onClick={()=>updateStatus(b.id,"confirmed")} style={{background:"rgba(39,174,96,.15)",border:"none",padding:".3rem .7rem",fontFamily:"var(--f-sans)",fontSize:".6rem",color:"rgba(39,200,100,.8)",cursor:"pointer"}}>✓</button><button onClick={()=>updateStatus(b.id,"cancelled")} style={{background:"rgba(192,57,43,.12)",border:"none",padding:".3rem .7rem",fontFamily:"var(--f-sans)",fontSize:".6rem",color:"rgba(220,80,60,.7)",cursor:"pointer"}}>✕</button></>}
                           {b.status==="confirmed"&&<button onClick={()=>updateStatus(b.id,"cancelled")} style={{background:"rgba(192,57,43,.12)",border:"none",padding:".3rem .7rem",fontFamily:"var(--f-sans)",fontSize:".6rem",color:"rgba(220,80,60,.7)",cursor:"pointer"}}>✕</button>}
@@ -490,7 +495,7 @@ export default function AdminDashboard() {
 
         {/* ── PRESTATIONS ─────────────────────────────────────────── */}
         {tab === "services" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "4rem", alignItems: "start" }}>
+          <div className="admin-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "clamp(1.5rem,4vw,4rem)", alignItems: "start" }}>
             <div>
               <p style={{ fontFamily:"var(--f-sans)", fontWeight:600, fontSize:".88rem", color:"var(--creme)", marginBottom:"1.5rem" }}>{svEdit ? "Modifier la prestation" : "Nouvelle prestation"}</p>
               <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
@@ -531,7 +536,7 @@ export default function AdminDashboard() {
 
         {/* ── ÉQUIPE ──────────────────────────────────────────────── */}
         {tab === "team" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "5rem", alignItems: "start" }}>
+          <div className="admin-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "clamp(1.5rem,4vw,5rem)", alignItems: "start" }}>
             <div>
               <p style={{ fontFamily:"var(--f-sans)", fontWeight:600, fontSize:".88rem", color:"var(--creme)", marginBottom:"1.5rem" }}>Ajouter un coiffeur</p>
               <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
@@ -588,7 +593,7 @@ export default function AdminDashboard() {
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ""; }}
               />
-              <input value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Légende (optionnel)" style={{ ...inp, width: "260px", textAlign: "center" }} />
+              <input value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Légende (optionnel)" style={{ ...inp, width: "min(260px, 100%)", textAlign: "center" }} />
               <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ ...btn(true), padding: ".75rem 2rem", fontSize: ".75rem", opacity: uploading ? .6 : 1 }}>
                 {uploading ? `Envoi ${uploadPct}%…` : "Choisir une photo"}
               </button>
@@ -601,7 +606,7 @@ export default function AdminDashboard() {
             {photos.length === 0
               ? <p style={{ fontFamily: "var(--f-sans)", fontSize: ".8rem", color: "rgba(245,240,232,.2)", textAlign: "center", padding: "3rem" }}>Aucune photo. Uploadez-en une.</p>
               : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "4px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(140px,44vw), 1fr))", gap: "4px" }}>
                   {photos.map(p => (
                     <div key={p.id} style={{ position: "relative", aspectRatio: "1", background: "rgba(245,240,232,.06)", overflow: "hidden" }}
                       onMouseEnter={e => { const ov = e.currentTarget.querySelector<HTMLElement>(".ov"); if (ov) ov.style.opacity = "1"; }}
@@ -649,7 +654,7 @@ export default function AdminDashboard() {
 
         {/* ── FERMETURES ──────────────────────────────────────────── */}
         {tab === "closures" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "5rem", alignItems: "start" }}>
+          <div className="admin-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: "clamp(1.5rem,4vw,5rem)", alignItems: "start" }}>
             <div>
               <p style={{ fontFamily:"var(--f-sans)", fontWeight:600, fontSize:".82rem", color:"var(--creme)", marginBottom:"1.5rem" }}>Ajouter une fermeture</p>
               <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
@@ -689,6 +694,26 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <style>{`
+        /* Agenda : scroll horizontal sur mobile */
+        .week-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        @media (max-width: 900px) {
+          .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .admin-form-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 600px) {
+          .stats-grid { grid-template-columns: 1fr 1fr !important; }
+          .admin-sub { display: none !important; }
+          .admin-email { display: none !important; }
+          .admin-site-link { display: none !important; }
+          .booking-list-svc { width: 100%; }
+        }
+        @media (max-width: 480px) {
+          .stats-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
