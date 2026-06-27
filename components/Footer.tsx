@@ -202,13 +202,21 @@ export default function Footer() {
           ))}
         </div>
 
-        {/* Copyright */}
-        <a href="https://breizhapp.tech" target="_blank" rel="noopener noreferrer" style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".55rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.15)", textDecoration: "none", transition: "color .2s" }}
-          onMouseEnter={e => { e.currentTarget.style.color = "rgba(245,240,232,.5)"; }}
-          onMouseLeave={e => { e.currentTarget.style.color = "rgba(245,240,232,.15)"; }}
-        >
-          © 2025 Aurum Studio — Site créé par BreizhApp
-        </a>
+        {/* Copyright + lien admin discret */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+          <a href="https://breizhapp.tech" target="_blank" rel="noopener noreferrer" style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".55rem", letterSpacing: ".3em", textTransform: "uppercase", color: "rgba(245,240,232,.15)", textDecoration: "none", transition: "color .2s" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "rgba(245,240,232,.5)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "rgba(245,240,232,.15)"; }}
+          >
+            © 2025 Aurum Studio — Site créé par BreizhApp
+          </a>
+          <a href="/admin/dashboard" style={{ fontFamily: "var(--f-sans)", fontWeight: 300, fontSize: ".5rem", letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(245,240,232,.08)", textDecoration: "none", transition: "color .2s" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "rgba(245,240,232,.35)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "rgba(245,240,232,.08)"; }}
+          >
+            Admin
+          </a>
+        </div>
       </div>
 
     </footer>
